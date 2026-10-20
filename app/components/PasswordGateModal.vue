@@ -45,6 +45,14 @@ function handleUnlock() {
         {{ t('eventView.passwordPrompt') }}
       </p>
 
+      <div
+        v-if="event?.slug === 'courmayeur-weekend'"
+        class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sky-100/90 px-3 py-1 text-[11px] font-semibold text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-200 dark:border-sky-800"
+      >
+        <UIcon name="i-lucide-info" class="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+        <span>Password demo: <strong class="font-mono underline">neve</strong> o <strong class="font-mono underline">courmayeur2026</strong></span>
+      </div>
+
       <form @submit.prevent="handleUnlock" class="mt-6 space-y-4">
         <div>
           <UInput
