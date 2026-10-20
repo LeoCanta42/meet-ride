@@ -1,0 +1,206 @@
+<script setup lang="ts">
+import { useI18n } from '~/composables/useI18n'
+import { useEvent } from '~/composables/useEvent'
+import { useOrganizerAuth } from '~/composables/useOrganizerAuth'
+
+const { t } = useI18n()
+const { createEvent } = useEvent()
+const { user, initialLoaded } = useOrganizerAuth()
+const toast = useToast()
+
+const title = ref('')
+const destination = ref('')
+const eventDate = ref('')
+const sharedPassword = ref('')
+const description = ref('')
+const loading = ref(false)
+const errorMessage = ref('')
+
+// Initialize default date (next Saturday at 09:00)
+onMounted(() => {
+  const d = new Date()
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7))
+  d.setHours(9, 0, 0, 0)
+  eventDate.value = d.toISOString().slice(0, 16)
+  generatePassword()
+})
+
+watch([user, initialLoaded], ([currentUser, loaded]) => {
+  if (loaded && !currentUser) {
+    navigateTo('/login')
+  }
+}, { immediate: true })
+
+function generatePassword() {
+  const words = ['passaggio', 'viaggio', 'raduno', 'carpool', 'festa', 'gita', 'amici', 'corsa']
+  const randomWord = words[Math.floor(Math.random() * words.length)]
+  const num = Math.floor(100 + Math.random() * 900)
+  sharedPassword.value = `${randomWord}${num}`
+}
+
+async function handleSubmit() {
+  errorMessage.value = ''
+  if (!title.value.trim() || !destination.value.trim() || !eventDate.value || !sharedPassword.value.trim()) {
+    errorMessage.value = t('common.required')
+    return
+  }
+
+  loading.value = true
+  try {
+    const res = await createEvent({
+      title: title.value.trim(),
+      destination: destination.value.trim(),
+      eventDate: new Date(eventDate.value).toISOString(),
+      sharedPassword: sharedPassword.value.trim(),
+      description: description.value.trim()
+    })
+
+    if (res.success && res.event) {
+      toast.add({
+        title: t('common.success'),
+        description: t('events.createTitle'),
+        color: 'success'
+      })
+      navigateTo(`/events/${res.event.id}`)
+    } else {
+      errorMessage.value = res.error || t('common.error')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <NuxtLink to="/" class="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-sky-600 mb-2 transition-colors">
+          <UIcon name="i-lucide-arrow-left" class="h-4 w-4" />
+          {{ t('common.back') }}
+        </NuxtLink>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          {{ t('events.createTitle') }}
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          {{ t('events.createSubtitle') }}
+        </p>
+      </div>
+    </div>
+
+    <div class="surface-card rounded-3xl p-6 sm:p-8 shadow-xl">
+      <form @submit.prevent="handleSubmit" class="space-y-5">
+        <!-- Title -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            {{ t('events.title') }} *
+          </label>
+          <UInput
+            v-model="title"
+            :placeholder="t('events.titlePlaceholder')"
+            required
+            size="lg"
+            class="w-full font-semibold"
+          />
+        </div>
+
+        <!-- Destination & Date -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              {{ t('events.destination') }} *
+            </label>
+            <UInput
+              v-model="destination"
+              :placeholder="t('events.destinationPlaceholder')"
+              icon="i-lucide-map-pin"
+              required
+              class="w-full"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              {{ t('events.date') }} *
+            </label>
+            <UInput
+              v-model="eventDate"
+              type="datetime-local"
+              icon="i-lucide-calendar"
+              required
+              class="w-full"
+            />
+          </div>
+        </div>
+
+        <!-- Shared Password -->
+        <div class="rounded-2xl border border-sky-100 bg-sky-50/50 p-4 dark:border-sky-950 dark:bg-sky-950/20">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <UIcon name="i-lucide-key" class="h-4 w-4 text-sky-500" />
+              <span>{{ t('events.sharedPassword') }} *</span>
+            </label>
+
+            <button
+              type="button"
+              @click="generatePassword"
+              class="text-[11px] font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 hover:underline flex items-center gap-1"
+            >
+              <UIcon name="i-lucide-refresh-cw" class="h-3 w-3" />
+              <span>Genera automatica</span>
+            </button>
+          </div>
+
+          <UInput
+            v-model="sharedPassword"
+            :placeholder="t('events.sharedPasswordPlaceholder')"
+            required
+            class="w-full font-mono font-semibold"
+          />
+
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+            {{ t('events.sharedPasswordHelp') }}
+          </p>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            {{ t('events.description') }}
+          </label>
+          <UTextarea
+            v-model="description"
+            :placeholder="t('events.descriptionPlaceholder')"
+            :rows="3"
+            class="w-full"
+          />
+        </div>
+
+        <!-- Error display -->
+        <div v-if="errorMessage" class="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-600 dark:bg-red-950/40 dark:text-red-400">
+          {{ errorMessage }}
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <NuxtLink to="/">
+            <UButton color="neutral" variant="ghost">
+              {{ t('common.cancel') }}
+            </UButton>
+          </NuxtLink>
+
+          <UButton
+            type="submit"
+            color="primary"
+            size="lg"
+            :loading="loading"
+            class="font-semibold shadow-md shadow-sky-500/20"
+          >
+            <UIcon name="i-lucide-plus" class="h-5 w-5 mr-1" />
+            {{ t('events.createSubmit') }}
+          </UButton>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>

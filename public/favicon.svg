@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="24" fill="url(#grad)" />
+  <!-- Car icon with group ride symbol -->
+  <path d="M24 64h52c2.2 0 4-1.8 4-4v-8c0-2-1.3-3.8-3.2-4.4L68 44c-1.5-.5-3.1-.1-4.2 1l-3.8 3.8H40l-3.8-3.8c-1.1-1.1-2.7-1.5-4.2-1l-8.8 3.6C21.3 48.2 20 50 20 52v8c0 2.2 1.8 4 4 4z" fill="#ffffff" opacity="0.95"/>
+  <circle cx="34" cy="65" r="7" fill="#0f172a" />
+  <circle cx="34" cy="65" r="3.5" fill="#ffffff" />
+  <circle cx="66" cy="65" r="7" fill="#0f172a" />
+  <circle cx="66" cy="65" r="3.5" fill="#ffffff" />
+  <!-- 2 passenger heads / location pins -->
+  <circle cx="42" cy="33" r="5" fill="#ffffff" />
+  <circle cx="58" cy="33" r="5" fill="#ffffff" />
+  <path d="M35 44c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none" />
+  <path d="M51 44c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none" />
+</svg>

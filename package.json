@@ -1,0 +1,26 @@
+{
+  "name": "meet-ride",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "nuxt": "^4.0.0",
+    "vue": "^3.5.0",
+    "vue-router": "^5.0.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.140",
+    "@nuxt/ui": "^4.11.3",
+    "@types/node": "^26.6.5",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "typescript": "^5.7.3",
+    "vue-tsc": "^3.3.12"
+  }
+}
