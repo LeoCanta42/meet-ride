@@ -19,12 +19,19 @@ const isOpen = ref(false)
 const calculating = ref(false)
 const applying = ref(false)
 const result = ref<OptimizationResult | null>(null)
+const errorMessage = ref('')
 
 async function handleCalculate() {
   calculating.value = true
+  errorMessage.value = ''
   try {
     const res = await optimizeSeats(false)
-    result.value = res
+    if (res.error) {
+      errorMessage.value = res.error
+      result.value = null
+    } else {
+      result.value = res.result || null
+    }
   } finally {
     calculating.value = false
   }
@@ -33,15 +40,20 @@ async function handleCalculate() {
 async function handleApply() {
   if (!result.value || result.value.suggestions.length === 0) return
   applying.value = true
+  errorMessage.value = ''
   try {
-    await optimizeSeats(true)
-    toast.add({
-      title: t('optimizer.appliedSuccess'),
-      color: 'success'
-    })
-    emit('optimized')
-    isOpen.value = false
-    result.value = null
+    const res = await optimizeSeats(true)
+    if (res.error) {
+      errorMessage.value = res.error
+    } else {
+      toast.add({
+        title: t('optimizer.appliedSuccess'),
+        color: 'success'
+      })
+      emit('optimized')
+      isOpen.value = false
+      result.value = null
+    }
   } finally {
     applying.value = false
   }
@@ -52,13 +64,18 @@ async function handleApply() {
   <div class="rounded-2xl border border-sky-200/80 bg-gradient-to-r from-sky-50/70 to-cyan-50/50 p-4 sm:p-5 dark:border-sky-900/60 dark:from-sky-950/30 dark:to-cyan-950/20">
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white shadow-md shadow-sky-600/30">
           <UIcon name="i-lucide-sparkles" class="h-5 w-5" />
         </div>
         <div>
-          <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base">
-            {{ t('optimizer.title') }}
-          </h4>
+          <div class="flex items-center gap-2">
+            <h4 class="font-bold text-slate-900 dark:text-white text-sm sm:text-base">
+              {{ t('optimizer.title') }}
+            </h4>
+            <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+              Gemini AI
+            </span>
+          </div>
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             {{ t('optimizer.subtitle') }}
           </p>
@@ -74,7 +91,7 @@ async function handleApply() {
           @click="() => { isOpen = true; handleCalculate(); }"
           class="font-semibold text-xs shadow-sm w-full sm:w-auto"
         >
-          <UIcon name="i-lucide-route" class="h-4 w-4 mr-1.5" />
+          <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1.5" />
           {{ t('optimizer.runBtn') }}
         </UButton>
       </div>
@@ -84,21 +101,50 @@ async function handleApply() {
     <UModal
       :open="isOpen"
       @update:open="isOpen = $event"
-      :title="t('optimizer.title')"
+      :title="t('optimizer.title') + ' (Gemini AI)'"
       :ui="{ content: 'sm:max-w-xl' }"
     >
       <template #body>
         <div class="space-y-4">
           <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            {{ t('optimizer.explanation') }}
+            L'intelligenza artificiale di Google Gemini analizza le posizioni di partenza dei guidatori, i punti di ritrovo dei passeggeri e la destinazione finale per trovare i migliori percorsi e massimizzare la capienza dei veicoli.
           </p>
 
-          <div v-if="calculating" class="py-8 text-center text-xs text-slate-500">
-            <UIcon name="i-lucide-loader-circle" class="h-6 w-6 animate-spin mx-auto text-sky-500 mb-2" />
-            {{ t('common.loading') }}
+          <!-- Loading state -->
+          <div v-if="calculating" class="py-10 text-center text-xs text-slate-500">
+            <UIcon name="i-lucide-loader-circle" class="h-7 w-7 animate-spin mx-auto text-sky-500 mb-2" />
+            <p class="font-semibold text-slate-700 dark:text-slate-200">Elaborazione percorso e posti con Gemini AI in corso...</p>
+            <p class="text-[11px] text-slate-400 mt-1">Confronto tra posizioni, capienza auto e direttrici di viaggio</p>
           </div>
 
+          <!-- Error Message (e.g. Missing GEMINI_API_KEY) -->
+          <div
+            v-else-if="errorMessage"
+            class="rounded-xl border border-red-200 bg-red-50/70 p-4 text-xs font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300 space-y-2"
+          >
+            <div class="flex items-start gap-2">
+              <UIcon name="i-lucide-alert-triangle" class="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p class="font-bold">Impossibile completare l'ottimizzazione AI</p>
+                <p class="mt-1 text-[11px] leading-relaxed">{{ errorMessage }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Result view -->
           <div v-else-if="result">
+            <!-- AI Summary Banner -->
+            <div
+              v-if="result.summary"
+              class="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3.5 text-xs text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200 flex items-start gap-2.5"
+            >
+              <UIcon name="i-lucide-bot" class="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+              <div>
+                <span class="font-bold block text-[11px] text-indigo-600 dark:text-indigo-400">Analisi Gemini AI:</span>
+                <p class="mt-0.5 leading-relaxed">{{ result.summary }}</p>
+              </div>
+            </div>
+
             <!-- No suggestions needed -->
             <div
               v-if="result.suggestions.length === 0"

@@ -1,6 +1,6 @@
 import { getDb, saveDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
-import { optimizeSeatAllocation } from '../../../utils/optimizer'
+import { optimizeSeatAllocationWithGemini } from '../../../utils/optimizer'
 import type { Participant } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -31,7 +31,8 @@ export default defineEventHandler(async (event) => {
   const riders = eventParticipants.filter(p => p.role === 'rider')
   const passengers = eventParticipants.filter(p => p.role === 'passenger')
 
-  const result = optimizeSeatAllocation(riders, passengers)
+  // Execute Gemini AI Optimization
+  const result = await optimizeSeatAllocationWithGemini(foundEvent, riders, passengers)
 
   if (apply && result.suggestions.length > 0) {
     for (const suggestion of result.suggestions) {

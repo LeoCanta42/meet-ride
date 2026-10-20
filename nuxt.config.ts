@@ -6,6 +6,10 @@ export default defineNuxtConfig({
     enabled: true
   },
 
+  runtimeConfig: {
+    geminiApiKey: process.env.GEMINI_API_KEY || ''
+  },
+
   css: ['~/assets/css/main.css'],
 
   telemetry: false,

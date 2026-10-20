@@ -165,8 +165,8 @@ export function useEvent() {
     }
   }
 
-  async function optimizeSeats(apply = false): Promise<OptimizationResult | null> {
-    if (!currentEvent.value) return null
+  async function optimizeSeats(apply = false): Promise<{ result?: OptimizationResult; error?: string }> {
+    if (!currentEvent.value) return { error: 'Nessun evento selezionato' }
 
     try {
       const res = await $fetch<OptimizationResult & { applied: boolean }>(
@@ -180,10 +180,10 @@ export function useEvent() {
       if (apply) {
         await loadEvent(currentEvent.value.id)
       }
-      return res
-    } catch (err) {
+      return { result: res }
+    } catch (err: any) {
       console.error('Error optimizing seats:', err)
-      return null
+      return { error: err.data?.statusMessage || err.message || 'Errore durante l\'ottimizzazione con Gemini AI' }
     }
   }
 
