@@ -40,7 +40,11 @@ export default defineNuxtConfig({
     classSuffix: ''
   },
 
-  modules: ['@nuxt/ui', '@vite-pwa/nuxt'],
+  modules: ['@nuxtjs/supabase', '@nuxt/ui', '@vite-pwa/nuxt'],
+
+  supabase: {
+    redirect: false
+  },
 
   nitro: {
     storage: {

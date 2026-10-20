@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import type { OrganizerUser, EventItem, Participant } from '~/types'
+import { getSupabaseServerClient } from './supabase'
 
 interface DatabaseSchema {
   organizers: (OrganizerUser & { passwordHash: string })[]
@@ -15,7 +16,7 @@ const defaultDb: DatabaseSchema = {
   participants: []
 }
 
-// In-memory cache + persistent storage via Nitro unstorage
+// In-memory cache + persistent storage via Nitro unstorage or Supabase
 let inMemoryDb: DatabaseSchema | null = null
 
 export async function getDb(): Promise<DatabaseSchema> {
@@ -23,6 +24,71 @@ export async function getDb(): Promise<DatabaseSchema> {
     return inMemoryDb
   }
 
+  const supabase = getSupabaseServerClient()
+
+  if (supabase) {
+    try {
+      // 1. Fetch from Supabase
+      const [orgsRes, eventsRes, partsRes] = await Promise.all([
+        supabase.from('organizers').select('*'),
+        supabase.from('events').select('*'),
+        supabase.from('participants').select('*')
+      ])
+
+      if (!orgsRes.error && !eventsRes.error && !partsRes.error) {
+        const organizers = (orgsRes.data || []).map(o => ({
+          id: o.id,
+          email: o.email,
+          name: o.name,
+          passwordHash: o.password_hash || '',
+          createdAt: o.created_at
+        }))
+
+        const events: EventItem[] = (eventsRes.data || []).map(e => ({
+          id: e.id,
+          organizerId: e.organizer_id || '',
+          slug: e.slug,
+          title: e.title,
+          description: e.description || '',
+          destination: e.destination,
+          destinationCoords: e.destination_lat && e.destination_lng
+            ? { lat: e.destination_lat, lng: e.destination_lng }
+            : null,
+          eventDate: e.event_date,
+          sharedPassword: e.shared_password,
+          status: (e.status as any) || 'active',
+          createdAt: e.created_at,
+          updatedAt: e.updated_at
+        }))
+
+        const participants: Participant[] = (partsRes.data || []).map(p => ({
+          id: p.id,
+          eventId: p.event_id,
+          name: p.name,
+          role: p.role as any,
+          phone: p.phone || undefined,
+          notes: p.notes || undefined,
+          pickupLocation: p.pickup_location || undefined,
+          pickupCoords: p.pickup_lat && p.pickup_lng ? { lat: p.pickup_lat, lng: p.pickup_lng } : null,
+          carModel: p.car_model || undefined,
+          totalSeats: p.total_seats || 4,
+          departureTime: p.departure_time || undefined,
+          departureLocation: p.departure_location || undefined,
+          departureCoords: p.departure_lat && p.departure_lng ? { lat: p.departure_lat, lng: p.departure_lng } : null,
+          assignedRiderId: p.assigned_rider_id || null,
+          token: p.token,
+          createdAt: p.created_at
+        }))
+
+        inMemoryDb = { organizers, events, participants }
+        return inMemoryDb
+      }
+    } catch (err) {
+      console.warn('[DB] Supabase read failed, falling back to local store:', err)
+    }
+  }
+
+  // Fallback to local file storage
   try {
     const storage = useStorage('meetride')
     const raw = await storage.getItem<DatabaseSchema>(STORAGE_KEY)
@@ -31,7 +97,7 @@ export async function getDb(): Promise<DatabaseSchema> {
       return inMemoryDb
     }
   } catch (err) {
-    console.warn('[DB] Failed reading from storage:', err)
+    console.warn('[DB] Failed reading from local storage:', err)
   }
 
   // Seed sample event if database is brand new so user can immediately test!
@@ -43,11 +109,81 @@ export async function getDb(): Promise<DatabaseSchema> {
 
 export async function saveDb(data: DatabaseSchema): Promise<void> {
   inMemoryDb = data
+
+  // 1. Save to local storage cache
   try {
     const storage = useStorage('meetride')
     await storage.setItem(STORAGE_KEY, data)
   } catch (err) {
-    console.error('[DB] Failed saving to storage:', err)
+    console.error('[DB] Failed saving to local storage:', err)
+  }
+
+  // 2. Sync to Supabase if configured
+  const supabase = getSupabaseServerClient()
+  if (supabase) {
+    try {
+      // Upsert organizers
+      if (data.organizers.length > 0) {
+        await supabase.from('organizers').upsert(
+          data.organizers.map(o => ({
+            id: o.id,
+            email: o.email,
+            name: o.name,
+            password_hash: o.passwordHash,
+            created_at: o.createdAt
+          }))
+        )
+      }
+
+      // Upsert events
+      if (data.events.length > 0) {
+        await supabase.from('events').upsert(
+          data.events.map(e => ({
+            id: e.id,
+            organizer_id: e.organizerId || null,
+            slug: e.slug,
+            title: e.title,
+            description: e.description || '',
+            destination: e.destination,
+            destination_lat: e.destinationCoords?.lat || null,
+            destination_lng: e.destinationCoords?.lng || null,
+            event_date: e.eventDate,
+            shared_password: e.sharedPassword || '',
+            status: e.status,
+            created_at: e.createdAt,
+            updated_at: e.updatedAt
+          }))
+        )
+      }
+
+      // Upsert participants
+      if (data.participants.length > 0) {
+        await supabase.from('participants').upsert(
+          data.participants.map(p => ({
+            id: p.id,
+            event_id: p.eventId,
+            name: p.name,
+            role: p.role,
+            phone: p.phone || null,
+            notes: p.notes || null,
+            pickup_location: p.pickupLocation || null,
+            pickup_lat: p.pickupCoords?.lat || null,
+            pickup_lng: p.pickupCoords?.lng || null,
+            car_model: p.carModel || null,
+            total_seats: p.totalSeats || 4,
+            departure_time: p.departureTime || null,
+            departure_location: p.departureLocation || null,
+            departure_lat: p.departureCoords?.lat || null,
+            departure_lng: p.departureCoords?.lng || null,
+            assigned_rider_id: p.assignedRiderId || null,
+            token: p.token || '',
+            created_at: p.createdAt
+          }))
+        )
+      }
+    } catch (err) {
+      console.warn('[DB] Supabase sync failed:', err)
+    }
   }
 }
 
@@ -69,8 +205,8 @@ export function generateSlug(title: string): string {
 }
 
 function getInitialSeedData(): DatabaseSchema {
-  const demoOrganizerId = 'org-demo-1'
-  const demoEventId = 'event-courmayeur-demo'
+  const demoOrganizerId = '00000000-0000-0000-0000-000000000001'
+  const demoEventId = '00000000-0000-0000-0000-000000000002'
   const demoSlug = 'courmayeur-weekend'
 
   const demoOrganizer = {
@@ -96,8 +232,8 @@ function getInitialSeedData(): DatabaseSchema {
     updatedAt: new Date().toISOString()
   }
 
-  const rider1Id = 'rider-1'
-  const rider2Id = 'rider-2'
+  const rider1Id = '00000000-0000-0000-0000-000000000011'
+  const rider2Id = '00000000-0000-0000-0000-000000000012'
 
   const demoParticipants: Participant[] = [
     {
@@ -127,38 +263,38 @@ function getInitialSeedData(): DatabaseSchema {
       createdAt: new Date().toISOString()
     },
     {
-      id: 'passenger-1',
+      id: '00000000-0000-0000-0000-000000000021',
       eventId: demoEventId,
       name: 'Federico Neri',
       role: 'passenger',
       phone: '+39 333 1122334',
       pickupLocation: 'Milano Loreto',
       pickupCoords: { lat: 45.4862, lng: 9.2173 },
-      assignedRiderId: rider1Id, // seated with Andrea
+      assignedRiderId: rider1Id,
       notes: 'Ho sci e una borsa morbida',
       createdAt: new Date().toISOString()
     },
     {
-      id: 'passenger-2',
+      id: '00000000-0000-0000-0000-000000000022',
       eventId: demoEventId,
       name: 'Sara Colombo',
       role: 'passenger',
       phone: '+39 339 5566778',
       pickupLocation: 'Milano Repubblica',
       pickupCoords: { lat: 45.4789, lng: 9.1982 },
-      assignedRiderId: rider1Id, // seated with Andrea
+      assignedRiderId: rider1Id,
       notes: 'Zaino e scarponi',
       createdAt: new Date().toISOString()
     },
     {
-      id: 'passenger-3',
+      id: '00000000-0000-0000-0000-000000000023',
       eventId: demoEventId,
       name: 'Matteo Gatti',
       role: 'passenger',
       phone: '+39 328 4433221',
       pickupLocation: 'Sesto San Giovanni / Rondò',
       pickupCoords: { lat: 45.5342, lng: 9.2274 },
-      assignedRiderId: null, // waiting for allocation
+      assignedRiderId: null,
       notes: 'Flessibile, posso arrivare anche a Monza',
       createdAt: new Date().toISOString()
     }

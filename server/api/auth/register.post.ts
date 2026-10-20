@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { getDb, saveDb, hashPassword } from '../../utils/db'
 import { createOrganizerSession } from '../../utils/auth'
 
@@ -37,7 +38,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const newOrganizer = {
-    id: 'org-' + Math.random().toString(36).substring(2, 10),
+    id: crypto.randomUUID(),
     email: cleanEmail,
     name: name.trim(),
     passwordHash: hashPassword(password),

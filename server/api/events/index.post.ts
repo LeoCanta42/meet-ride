@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { getDb, saveDb, generateSlug } from '../../utils/db'
 import { getAuthenticatedOrganizer } from '../../utils/auth'
 import type { EventItem } from '~/types'
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
   const db = await getDb()
   const slug = generateSlug(title)
-  const id = 'ev-' + Math.random().toString(36).substring(2, 10)
+  const id = crypto.randomUUID()
 
   const newEvent: EventItem = {
     id,

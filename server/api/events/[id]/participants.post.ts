@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { getDb, saveDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
 import type { Participant, ParticipantRole } from '~/types'
@@ -94,7 +95,7 @@ export default defineEventHandler(async (event) => {
     db.participants[participantIndex] = updatedOrCreated
   } else {
     // New participant
-    const newId = 'p-' + Math.random().toString(36).substring(2, 10)
+    const newId = crypto.randomUUID()
     updatedOrCreated = {
       id: newId,
       eventId: foundEvent.id,
