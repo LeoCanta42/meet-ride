@@ -14,6 +14,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const password = ref('')
+const showPassword = ref(false)
 
 function handleUnlock() {
   if (!password.value.trim()) return
@@ -48,14 +49,31 @@ function handleUnlock() {
         <div>
           <UInput
             v-model="password"
-            type="password"
+            :type="showPassword ? 'text' : 'password'"
             :placeholder="t('events.sharedPasswordPlaceholder')"
             icon="i-lucide-key"
             size="lg"
+            :ui="{ trailing: 'pe-1' }"
             class="w-full text-center font-mono"
             autofocus
             required
-          />
+          >
+            <template #trailing>
+              <UButton
+                type="button"
+                color="neutral"
+                variant="link"
+                size="sm"
+                :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                :aria-label="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :title="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :aria-pressed="showPassword"
+                tabindex="-1"
+                @pointerdown.prevent
+                @click="showPassword = !showPassword"
+              />
+            </template>
+          </UInput>
         </div>
 
         <div v-if="error" class="text-xs font-semibold text-red-500">

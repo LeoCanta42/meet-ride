@@ -31,6 +31,7 @@ export default defineEventHandler(async (event) => {
     name,
     role,
     phone,
+    pin,
     notes,
     pickupLocation,
     pickupCoords,
@@ -55,6 +56,12 @@ export default defineEventHandler(async (event) => {
   let participantIndex = -1
   if (participantId) {
     participantIndex = db.participants.findIndex(p => p.id === participantId && p.eventId === foundEvent.id)
+    if (participantIndex >= 0) {
+      const target = db.participants[participantIndex]!
+      if (!isOrganizer && target.token && target.token !== incomingToken) {
+        throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a modificare questo partecipante' })
+      }
+    }
   } else if (incomingToken) {
     participantIndex = db.participants.findIndex(p => p.token === incomingToken && p.eventId === foundEvent.id)
   }
@@ -82,6 +89,7 @@ export default defineEventHandler(async (event) => {
       name: name.trim(),
       role: role as ParticipantRole,
       phone: phone ? phone.trim() : undefined,
+      pin: pin !== undefined ? (pin ? pin.trim() : undefined) : existing.pin,
       notes: notes ? notes.trim() : undefined,
       pickupLocation: pickupLocation ? pickupLocation.trim() : undefined,
       pickupCoords: pickupCoords || null,
@@ -102,6 +110,7 @@ export default defineEventHandler(async (event) => {
       name: name.trim(),
       role: role as ParticipantRole,
       phone: phone ? phone.trim() : undefined,
+      pin: pin ? pin.trim() : undefined,
       notes: notes ? notes.trim() : undefined,
       pickupLocation: pickupLocation ? pickupLocation.trim() : undefined,
       pickupCoords: pickupCoords || null,

@@ -47,6 +47,7 @@ create table if not exists public.participants (
   name text not null,
   role text not null check (role in ('rider', 'passenger')),
   phone text,
+  pin text,
   notes text,
   -- Passenger pickup
   pickup_location text,

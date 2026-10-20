@@ -17,6 +17,8 @@ const { t } = useI18n()
 const role = ref<ParticipantRole>('passenger')
 const name = ref('')
 const phone = ref('')
+const pin = ref('')
+const showPin = ref(false)
 const notes = ref('')
 
 // Rider fields
@@ -36,6 +38,7 @@ watch(() => props.open, (val) => {
       role.value = props.initialData.role
       name.value = props.initialData.name
       phone.value = props.initialData.phone || ''
+      pin.value = props.initialData.pin || ''
       notes.value = props.initialData.notes || ''
       carModel.value = props.initialData.carModel || ''
       totalSeats.value = props.initialData.totalSeats || 4
@@ -47,6 +50,7 @@ watch(() => props.open, (val) => {
       role.value = 'passenger'
       name.value = ''
       phone.value = ''
+      pin.value = ''
       notes.value = ''
       carModel.value = ''
       totalSeats.value = 4
@@ -64,6 +68,7 @@ function handleSubmit() {
     name: name.value.trim(),
     role: role.value,
     phone: phone.value.trim() || undefined,
+    pin: pin.value.trim() || undefined,
     notes: notes.value.trim() || undefined
   }
 
@@ -154,8 +159,39 @@ function handleSubmit() {
               type="tel"
               class="w-full"
             />
-            <p class="text-[10px] text-slate-400 mt-0.5">Visibile solo ai compagni di viaggio</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">Visibile ai compagni e utile per accedere da altri dispositivi</p>
           </div>
+        </div>
+
+        <!-- Optional PIN for cross-device access -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            PIN personale
+            <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale, es. 4 cifre per accedere rapidamente da altri dispositivi)</span>
+          </label>
+          <UInput
+            v-model="pin"
+            :type="showPin ? 'text' : 'password'"
+            placeholder="es. 1234"
+            maxlength="10"
+            icon="i-lucide-key-round"
+            :ui="{ trailing: 'pe-1' }"
+            class="w-full font-mono"
+          >
+            <template #trailing>
+              <UButton
+                type="button"
+                color="neutral"
+                variant="link"
+                size="sm"
+                :icon="showPin ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                :aria-label="showPin ? t('common.hidePassword') : t('common.showPassword')"
+                tabindex="-1"
+                @pointerdown.prevent
+                @click="showPin = !showPin"
+              />
+            </template>
+          </UInput>
         </div>
 
         <!-- Rider Fields -->

@@ -9,6 +9,7 @@ const toast = useToast()
 const name = ref('')
 const email = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const errorMessage = ref('')
 
 // If already logged in, redirect
@@ -78,10 +79,27 @@ async function handleSubmit() {
           </label>
           <UInput
             v-model="password"
-            type="password"
+            :type="showPassword ? 'text' : 'password'"
+            :ui="{ trailing: 'pe-1' }"
             required
             class="w-full"
-          />
+          >
+            <template #trailing>
+              <UButton
+                type="button"
+                color="neutral"
+                variant="link"
+                size="sm"
+                :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                :aria-label="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :title="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :aria-pressed="showPassword"
+                tabindex="-1"
+                @pointerdown.prevent
+                @click="showPassword = !showPassword"
+              />
+            </template>
+          </UInput>
         </div>
 
         <div v-if="errorMessage" class="rounded-lg bg-red-50 p-2.5 text-xs font-semibold text-red-600 dark:bg-red-950/40 dark:text-red-400">

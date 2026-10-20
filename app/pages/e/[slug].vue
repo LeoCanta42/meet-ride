@@ -2,8 +2,8 @@
 const route = useRoute()
 const slug = route.params.slug as string
 
-// Immediately redirect to /events/[slug]
-navigateTo(`/events/${slug}`, { replace: true })
+// Immediately redirect to /events/[slug] preserving any query params (like ?p=...)
+navigateTo({ path: `/events/${slug}`, query: route.query }, { replace: true })
 </script>
 
 <template>

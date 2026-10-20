@@ -12,6 +12,7 @@ const title = ref('')
 const destination = ref('')
 const eventDate = ref('')
 const sharedPassword = ref('')
+const showPassword = ref(true)
 const description = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -153,10 +154,28 @@ async function handleSubmit() {
 
           <UInput
             v-model="sharedPassword"
+            :type="showPassword ? 'text' : 'password'"
             :placeholder="t('events.sharedPasswordPlaceholder')"
+            :ui="{ trailing: 'pe-1' }"
             required
             class="w-full font-mono font-semibold"
-          />
+          >
+            <template #trailing>
+              <UButton
+                type="button"
+                color="neutral"
+                variant="link"
+                size="sm"
+                :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                :aria-label="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :title="showPassword ? t('common.hidePassword') : t('common.showPassword')"
+                :aria-pressed="showPassword"
+                tabindex="-1"
+                @pointerdown.prevent
+                @click="showPassword = !showPassword"
+              />
+            </template>
+          </UInput>
 
           <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
             {{ t('events.sharedPasswordHelp') }}

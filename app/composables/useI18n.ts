@@ -21,7 +21,9 @@ const translations = {
       search: 'Cerca...',
       all: 'Tutti',
       success: 'Operazione completata con successo',
-      error: 'Si è verificato un errore'
+      error: 'Si è verificato un errore',
+      showPassword: 'Mostra password',
+      hidePassword: 'Nascondi password'
     },
     nav: {
       home: 'Home',
@@ -202,7 +204,9 @@ const translations = {
       search: 'Search...',
       all: 'All',
       success: 'Action completed successfully',
-      error: 'An error occurred'
+      error: 'An error occurred',
+      showPassword: 'Show password',
+      hidePassword: 'Hide password'
     },
     nav: {
       home: 'Home',

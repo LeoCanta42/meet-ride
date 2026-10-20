@@ -20,11 +20,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizer = await getAuthenticatedOrganizer(event)
-  const isOrganizer = organizer?.id === foundEvent.organizerId
-  const unlocked = isOrganizer || isEventUnlocked(event, foundEvent.id)
+  const isOrganizer = organizer && organizer.id === foundEvent.organizerId
 
-  if (!unlocked) {
-    throw createError({ statusCode: 403, statusMessage: 'Non autorizzato' })
+  if (!isOrganizer) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Solo l\'organizzatore che ha creato l\'evento può utilizzare l\'ottimizzatore AI'
+    })
   }
 
   const eventParticipants = db.participants.filter(p => p.eventId === foundEvent.id)

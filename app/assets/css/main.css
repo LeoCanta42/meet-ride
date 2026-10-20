@@ -143,3 +143,9 @@
 .pt-safe {
   padding-top: var(--safe-top);
 }
+
+/* Hide default browser password reveal button in Edge/IE */
+::-ms-reveal {
+  display: none;
+}
+

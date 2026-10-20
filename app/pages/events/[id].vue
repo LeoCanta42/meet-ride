@@ -26,8 +26,36 @@ const toast = useToast()
 const unlockError = ref('')
 const unlocking = ref(false)
 const isModalOpen = ref(false)
+const showReconnectModal = ref(false)
 const modalInitialData = ref<Participant | null>(null)
 const actionLoading = ref(false)
+
+const allParticipants = computed<Participant[]>(() => {
+  const list: Participant[] = []
+  for (const c of cars.value) {
+    list.push(c.rider)
+    for (const p of c.passengers) {
+      list.push(p)
+    }
+  }
+  for (const u of unassignedPassengers.value) {
+    list.push(u)
+  }
+  return list
+})
+
+function copyPersonalLink() {
+  if (!currentEvent.value || !myParticipant.value?.token) return
+  const origin = window.location.origin
+  const path = `/events/${currentEvent.value.slug || currentEvent.value.id}`
+  const url = `${origin}${path}?p=${myParticipant.value.token}`
+  navigator.clipboard.writeText(url)
+  toast.add({
+    title: 'Link personale copiato!',
+    description: 'Aprilo su un altro dispositivo per gestire subito la tua auto o il tuo posto.',
+    color: 'success'
+  })
+}
 
 onMounted(async () => {
   await loadEvent(eventIdOrSlug.value)
@@ -333,7 +361,19 @@ const totalOccupiedSeats = computed(() => {
             </div>
           </div>
 
-          <div class="flex items-center gap-2 w-full sm:w-auto">
+          <div class="flex items-center flex-wrap gap-2 w-full sm:w-auto">
+            <UButton
+              color="neutral"
+              variant="outline"
+              size="sm"
+              @click="copyPersonalLink"
+              class="text-xs font-semibold"
+              title="Copia link personale per gestire la tua auto o posto da altri dispositivi"
+            >
+              <UIcon name="i-lucide-smartphone" class="h-3.5 w-3.5 mr-1 text-sky-500" />
+              <span>Link altri dispositivi</span>
+            </UButton>
+
             <UButton
               color="neutral"
               variant="outline"
@@ -368,6 +408,16 @@ const totalOccupiedSeats = computed(() => {
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Offri la tua auto o cerca un passaggio comodo con gli altri partecipanti.
             </p>
+            <div v-if="allParticipants.length > 0" class="mt-2">
+              <button
+                type="button"
+                @click="showReconnectModal = true"
+                class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1.5"
+              >
+                <UIcon name="i-lucide-smartphone" class="h-3.5 w-3.5 text-sky-500" />
+                <span>Sei già in lista da un altro dispositivo? Riconnetti il tuo profilo</span>
+              </button>
+            </div>
           </div>
 
           <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -378,7 +428,6 @@ const totalOccupiedSeats = computed(() => {
               @click="openJoinModal('passenger')"
               class="font-semibold text-xs shadow-sm flex-1 sm:flex-initial"
             >
-              <UIcon name="i-lucide-user" class="h-4 w-4 mr-1.5" />
               {{ t('eventView.iNeedRide') }}
             </UButton>
 
@@ -389,15 +438,15 @@ const totalOccupiedSeats = computed(() => {
               @click="openJoinModal('rider')"
               class="font-semibold text-xs flex-1 sm:flex-initial"
             >
-              <UIcon name="i-lucide-car" class="h-4 w-4 mr-1.5 text-emerald-500" />
               {{ t('eventView.imDriving') }}
             </UButton>
           </div>
         </div>
       </div>
 
-      <!-- Smart Seat Allocation Optimizer -->
+      <!-- Smart Seat Allocation Optimizer (Organizer only) -->
       <OptimizationPanel
+        v-if="isOrganizer"
         :event-id="currentEvent.id"
         :is-organizer="isOrganizer"
         @optimized="loadEvent(currentEvent.id)"
@@ -533,6 +582,13 @@ const totalOccupiedSeats = computed(() => {
       v-model:open="isModalOpen"
       :initial-data="modalInitialData"
       @submit="handleParticipantSubmit"
+    />
+
+    <!-- Reconnect Profile Modal (Cross-device access) -->
+    <ReconnectModal
+      v-model:open="showReconnectModal"
+      :participants="allParticipants"
+      @reconnected="loadEvent(eventIdOrSlug)"
     />
   </div>
 </template>

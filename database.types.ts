@@ -96,6 +96,7 @@ export interface Database {
           name: string
           role: 'rider' | 'passenger'
           phone: string | null
+          pin: string | null
           notes: string | null
           pickup_location: string | null
           pickup_lat: number | null
@@ -116,6 +117,7 @@ export interface Database {
           name: string
           role: 'rider' | 'passenger'
           phone?: string | null
+          pin?: string | null
           notes?: string | null
           pickup_location?: string | null
           pickup_lat?: number | null
@@ -136,6 +138,7 @@ export interface Database {
           name?: string
           role?: 'rider' | 'passenger'
           phone?: string | null
+          pin?: string | null
           notes?: string | null
           pickup_location?: string | null
           pickup_lat?: number | null

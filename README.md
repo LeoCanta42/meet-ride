@@ -1,75 +1,192 @@
-# Meet & Ride 🚗👥
+<div align="center">
 
-Webapp progressiva (PWA) per il carpooling e la gestione dei passaggi auto per eventi, con ottimizzazione dei posti e dei percorsi.
+# 🚗 Meet & Ride
 
-## ✨ Caratteristiche Implementate
+**Smart Event Carpooling & Intelligent Ride Allocation PWA**
 
-1. **Autenticazione Organizzatori (Basic Auth)**
-   - Registrazione e accesso dedicato per gli organizzatori degli eventi.
-   - Dashboard personale degli eventi creati con riepilogo in tempo reale di auto, posti disponibili e passeggeri.
-   - Creazione, modifica ed eliminazione eventi.
+[![Nuxt](https://img.shields.io/badge/Nuxt-4.x-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Ready-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Gemini AI](https://img.shields.io/badge/Gemini-2.5%20AI-8E75B2?logo=google-gemini&logoColor=white)](https://aistudio.google.com/)
+[![PWA](https://img.shields.io/badge/PWA-Installable-FFA000?logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 
-2. **Accesso Partecipanti tramite Link & Password Condivisa**
-   - Gli invitati accedono all'evento tramite link diretto (es. `/events/[slug]` o `/events/[id]`).
-   - Nessun obbligo di registrazione per i partecipanti: accesso protetto tramite la **password condivisa** impostata dall'organizzatore.
-   - Salvataggio locale della sessione per non dover reinserire la password ad ogni ricaricamento.
+*Effortlessly coordinate shared car rides for ski trips, weddings, festivals, and parties.*
 
-3. **Ruoli Partecipanti: Guidatori & Passeggeri**
-   - **Guidatore (Rider)**:
-     - Dati auto (modello, targa/descrizione)
-     - Numero di posti passeggeri disponibili
-     - Luogo/zona di partenza e orario indicativo
-     - Recapito telefonico opzionale
-   - **Passeggero (Simple User)**:
-     - Punto di ritrovo richiesto
-     - Note personali (es. bagagli ingombranti, flessibilità)
-     - Scelta manuale del guidatore con cui viaggiare (con visualizzazione dei posti liberi e occupati).
+[Features](#-features) • [Tech Stack](#-tech-stack) • [Quick Start](#-quick-start) • [Environment Variables](#-environment-variables) • [Demo Event](#-demo-event)
 
-4. **Visualizzazione Posti Auto & Scelta Guidatore**
-   - Schede auto interattive con indicatori visivi per ogni posto:
-     - Sedile guidatore
-     - Posti occupati con i nomi dei passeggeri a bordo
-     - Slot liberi per salire a bordo
-   - Azioni a 1-click per salire a bordo ("Sali a bordo") o cambiare auto ("Lascia quest'auto").
-
-5. **Ottimizzatore Intelligente Posti & Posizioni (First Version)**
-   - Algoritmo che analizza la prossimità geografica (distanza in km o vicinanza testuale del punto di ritrovo/partenza) e la capienza residua dei veicoli.
-   - Finestra di anteprima delle raccomandazioni con indicazione del risparmio di chilometri.
-   - Applicazione automatica dei suggerimenti con un clic ("Applica Suggerimenti").
-
-6. **Bilingue (Italiano & Inglese)**
-   - Switch immediato della lingua (`IT` / `EN`) dalla barra di navigazione con reattività istantanea.
-
-7. **PWA (Progressive Web App)**
-   - Supporto completo offline con Workbox e Service Worker.
-   - Web App Manifest per l'installazione su smartphone (Android / iOS) e desktop.
-   - Banner di installazione integrato.
+</div>
 
 ---
 
-## 🚀 Come Avviare l'Applicazione
+## 📖 Overview
 
-### Sviluppo
+Organizing rides for group events usually ends up in a messy WhatsApp group with lost messages, confused drivers, and empty seats.
+
+**Meet & Ride** provides a frictionless web app where:
+1. **Organizers** create an event with a shared password and destination.
+2. **Guests** open the link and join without needing to create an account.
+3. **Drivers (Riders)** post their car model, available seats, and departure zone.
+4. **Passengers** pick their seat with 1 click or request a pickup.
+5. **AI Optimization (Gemini)** suggests the most efficient passenger-to-car assignments to minimize detours and fuel consumption.
+
+---
+
+## ✨ Features
+
+### 🚗 Interactive Car Seats & Ride Allocation
+- **Visual Car Cards**: Real-time view of every car, driver, passenger names, and remaining seats.
+- **1-Click Actions**: Guests can join a car with a single tap or switch cars easily.
+- **Unassigned Waiting List**: Clear overview of passengers who still need a ride.
+
+### 🧠 Gemini AI Optimization (Organizer Only)
+- Integrates Google's **Gemini 2.5 Flash** to analyze driver departure points, passenger pickup locations, and car capacities.
+- Generates optimal ride pairings, estimated distance savings, and rationales.
+- **One-Click Apply**: Automatically updates car seat assignments across the event.
+- **Access Control**: Strictly restricted to the event creator.
+
+### 📱 Frictionless Guest Model with Cross-Device Sync
+- **No Sign-Up Required**: Guests only need the event link and shared password.
+- **Cross-Device Recovery**:
+  - **Personal Management Link**: Share your private access URL (`/events/slug?p=token`) to switch between phone and desktop.
+  - **Phone / PIN Reconnect Modal**: Accessing from a new browser? Simply select your name and enter your phone number or 4-digit PIN to restore your profile.
+
+### 🔒 Privacy & Password Visibility Controls
+- **Eye Toggle Button**: Show/hide passwords across the app (event unlock gate, organizer login, registration, and participant PINs).
+- **Edge / Browser Clean**: Standardized reveal styling that suppresses conflicting browser icons.
+
+### 📲 Progressive Web App (PWA)
+- Installable on iOS (Safari Add to Home Screen) and Android (Chrome APK/PWA prompt).
+- Service Worker offline caching via Workbox for instant load times even in remote areas (e.g. mountain resorts).
+
+### 🌐 Internationalization & Modern Theming
+- Instant language toggle (**Italian** / **English**).
+- Dark and Light mode support with automatic OS detection.
+- Polished micro-interactions using `@nuxt/ui` and `@iconify-json/lucide`.
+
+---
+
+## 🛠 Tech Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Framework** | [Nuxt 4](https://nuxt.com/) (Vue 3 + Nitro Engine) |
+| **UI Components** | [@nuxt/ui v4](https://ui.nuxt.com/), [Tailwind CSS v4](https://tailwindcss.com/), [Lucide Icons](https://lucide.dev/) |
+| **Language** | [TypeScript](https://www.typescriptlang.org/) |
+| **AI Engine** | [@google/genai](https://www.npmjs.com/package/@google/genai) (Google Gemini 2.5) |
+| **Database** | Dual Mode: [Supabase](https://supabase.com/) (PostgreSQL) or zero-setup local persistent store |
+| **PWA** | [@vite-pwa/nuxt](https://vite-pwa-org.netlify.app/) & Workbox |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- **Node.js** `>= 18.x` (or `20.x` recommended)
+- **npm** or **pnpm**
+
+### 2. Installation
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/meet-ride.git
+cd meet-ride
+
+# Install dependencies
 npm install
+```
+
+### 3. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your credentials:
+```ini
+# Optional: Connect to your remote Supabase instance
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-publishable-key
+SUPABASE_SERVICE_KEY=your-service-role-secret-key
+
+# Optional: Add your Google Gemini API Key for AI seat optimization
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+> [!NOTE]
+> **Zero-Config Mode**: If Supabase variables are left blank, Meet & Ride automatically boots in **local storage mode** with pre-seeded demo data, allowing you to test right away without setting up any cloud databases.
+
+### 4. Run Development Server
+```bash
 npm run dev
 ```
-Apri il browser su `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Build di Produzione
+### 5. Type Checking & Production Build
 ```bash
+# Run TypeScript verification
+npm run typecheck
+
+# Build for production
 npm run build
+
+# Preview production build
 node .output/server/index.mjs
 ```
 
 ---
 
-## 🎿 Evento Demo Precaricato
+## 🎿 Demo Event
 
-L'app include già un evento demo pre-configurato per testare immediatamente tutte le funzionalità:
-- **Evento**: *Weekend Sci e Relax a Courmayeur*
-- **URL**: `http://localhost:3000/events/courmayeur-weekend`
-- **Password Condivisa**: `neve`
-- **Account Organizzatore Demo**:
-  - Email: `organizzatore@meetride.local`
-  - Password: `password123`
+The application includes a pre-seeded demo event ready for testing immediately upon launch:
+
+| Attribute | Demo Value |
+| :--- | :--- |
+| **Event Name** | *Weekend Sci e Relax a Courmayeur* |
+| **Event URL** | `http://localhost:3000/events/courmayeur-weekend` (or short link `/e/courmayeur-weekend`) |
+| **Shared Password** | `neve` |
+| **Organizer Account** | `organizzatore@meetride.local` |
+| **Organizer Password** | `password123` |
+
+---
+
+## 🗄️ Database Setup (Supabase)
+
+If deploying with Supabase:
+1. Create a new project in the [Supabase Dashboard](https://supabase.com/).
+2. Open the **SQL Editor** in your Supabase project.
+3. Run the complete idempotent schema script located in [`supabase/schema.sql`](supabase/schema.sql).
+4. Paste your project URL and API keys into `.env`.
+
+---
+
+## 📁 Project Structure
+
+```text
+meet-ride/
+├── app/
+│   ├── assets/css/          # TailwindCSS theme, accent palettes & global styles
+│   ├── components/          # Vue components (CarCard, OptimizationPanel, Modals, Navbar)
+│   ├── composables/         # Composable logic (useEvent, useOrganizerAuth, useI18n, usePwa)
+│   ├── pages/               # Nuxt file-based routing
+│   │   ├── events/
+│   │   │   ├── [id].vue     # Main event page (car cards, passenger allocation)
+│   │   │   └── new.vue      # Create new event
+│   │   ├── e/[slug].vue     # Clean short-link redirector
+│   │   ├── login.vue        # Organizer sign in
+│   │   └── register.vue     # Organizer sign up
+│   └── types/               # TypeScript interfaces & Supabase type definitions
+├── server/
+│   ├── api/                 # Nitro server endpoints (auth, events, participants, AI optimizer)
+│   └── utils/               # Server helpers (Supabase client, Gemini optimizer, JWT/Auth)
+├── supabase/
+│   └── schema.sql           # PostgreSQL idempotent schema
+├── public/                  # PWA icons, manifest & static assets
+└── nuxt.config.ts           # Nuxt configuration
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

@@ -22,6 +22,7 @@ const result = ref<OptimizationResult | null>(null)
 const errorMessage = ref('')
 
 async function handleCalculate() {
+  if (!props.isOrganizer) return
   calculating.value = true
   errorMessage.value = ''
   try {
@@ -38,7 +39,7 @@ async function handleCalculate() {
 }
 
 async function handleApply() {
-  if (!result.value || result.value.suggestions.length === 0) return
+  if (!props.isOrganizer || !result.value || result.value.suggestions.length === 0) return
   applying.value = true
   errorMessage.value = ''
   try {

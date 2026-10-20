@@ -34,6 +34,7 @@ export interface Participant {
   name: string
   role: ParticipantRole
   phone?: string
+  pin?: string
   notes?: string
   // Locations
   pickupLocation?: string

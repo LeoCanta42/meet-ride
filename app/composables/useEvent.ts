@@ -46,6 +46,24 @@ export function useEvent() {
       cars.value = res.cars || []
       unassignedPassengers.value = res.unassignedPassengers || []
 
+      // Check URL query parameters for personal access token (?p=xxx or ?token=xxx)
+      if (import.meta.client) {
+        try {
+          const route = useRoute()
+          const queryToken = (route.query.p || route.query.token) as string | undefined
+          if (queryToken && typeof queryToken === 'string') {
+            setLocalParticipantToken(res.event.id, queryToken.trim())
+            const router = useRouter()
+            const newQuery = { ...route.query }
+            delete newQuery.p
+            delete newQuery.token
+            router.replace({ query: newQuery }).catch(() => {})
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // Identify current user's participant record if they have registered
       const token = getLocalParticipantToken(res.event.id)
       if (token && res.isUnlocked) {
@@ -118,6 +136,30 @@ export function useEvent() {
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.data?.statusMessage || 'Errore nella registrazione' }
+    }
+  }
+
+  async function reconnectParticipant(participantId: string, credential: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      const res = await $fetch<{ success: boolean; participant: Participant; token: string }>(
+        `/api/events/${currentEvent.value.id}/reconnect`,
+        {
+          method: 'POST',
+          body: { participantId, credential }
+        }
+      )
+
+      if (res.token) {
+        setLocalParticipantToken(currentEvent.value.id, res.token)
+      }
+      myParticipant.value = res.participant
+
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Impossibile riconnettere il profilo' }
     }
   }
 
@@ -244,6 +286,9 @@ export function useEvent() {
     loadEvent,
     unlockEvent,
     registerParticipant,
+    reconnectParticipant,
+    getLocalParticipantToken,
+    setLocalParticipantToken,
     leaveEvent,
     selectCar,
     optimizeSeats,
