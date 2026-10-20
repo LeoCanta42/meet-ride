@@ -7,6 +7,8 @@ const { fetchMe } = useOrganizerAuth()
 useAppearance()
 const { t } = useI18n()
 
+const isPrivacyOpen = ref(false)
+
 onMounted(async () => {
   await fetchMe()
 })
@@ -40,11 +42,21 @@ useSeoMeta({
             <span>—</span>
             <span>Carpooling & Smart Seat Allocation</span>
           </div>
-          <div>
-            Nuxt 4 + Vue 3 + PWA
+          <div class="flex items-center gap-4">
+            <button
+              @click="isPrivacyOpen = true"
+              class="hover:text-sky-600 dark:hover:text-sky-400 hover:underline transition-colors cursor-pointer"
+            >
+              Privacy & GDPR
+            </button>
+            <span>•</span>
+            <span>Nuxt 4 + Vue 3 + PWA</span>
           </div>
         </div>
       </footer>
+
+      <!-- Privacy & GDPR Modal -->
+      <PrivacyModal v-model:open="isPrivacyOpen" />
 
       <!-- PWA Install Banner -->
       <PwaBanner />

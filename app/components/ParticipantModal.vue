@@ -133,6 +133,7 @@ function handleSubmit() {
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('participantModal.nameLabel') }} *
+              <span class="text-[10px] text-slate-400 font-normal ml-1">(anche solo nome o nickname)</span>
             </label>
             <UInput
               v-model="name"
@@ -145,6 +146,7 @@ function handleSubmit() {
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('participantModal.phoneLabel') }}
+              <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale)</span>
             </label>
             <UInput
               v-model="phone"
@@ -152,6 +154,7 @@ function handleSubmit() {
               type="tel"
               class="w-full"
             />
+            <p class="text-[10px] text-slate-400 mt-0.5">Visibile solo ai compagni di viaggio</p>
           </div>
         </div>
 
