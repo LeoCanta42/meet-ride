@@ -439,13 +439,14 @@ function getInitialSeedData(): DatabaseSchema {
       name: 'Andrea Bianchi',
       role: 'rider',
       phone: '+39 340 1234567',
+      pin: '1234',
+      token: 'demo_token_rider_1',
       carModel: 'Volkswagen Golf Grigia',
       totalSeats: 4,
       price: 60,
       departureTime: '15:30',
       departureLocation: 'Milano Centrale / Stazione FS',
       departureCoords: { lat: 45.4854, lng: 9.2045 },
-      token: 'demo_token_rider_1',
       createdAt: new Date().toISOString()
     },
     {
@@ -454,13 +455,14 @@ function getInitialSeedData(): DatabaseSchema {
       name: 'Chiara Verdi',
       role: 'rider',
       phone: '+39 347 9876543',
+      pin: '4321',
+      token: 'demo_token_rider_2',
       carModel: 'Peugeot 2008 Nera',
       totalSeats: 3,
       price: 45,
       departureTime: '16:00',
       departureLocation: 'Monza / Centro Commerciale Brianza',
       departureCoords: { lat: 45.5845, lng: 9.2744 },
-      token: 'demo_token_rider_2',
       createdAt: new Date().toISOString()
     },
     {
@@ -469,11 +471,12 @@ function getInitialSeedData(): DatabaseSchema {
       name: 'Federico Neri',
       role: 'passenger',
       phone: '+39 333 1122334',
+      pin: '1122',
+      token: 'demo_token_pass_1',
       pickupLocation: 'Milano Loreto',
       pickupCoords: { lat: 45.4862, lng: 9.2173 },
       assignedRiderId: rider1Id,
       notes: 'Ho sci e una borsa morbida',
-      token: 'demo_token_pass_1',
       createdAt: new Date().toISOString()
     },
     {
@@ -482,11 +485,12 @@ function getInitialSeedData(): DatabaseSchema {
       name: 'Sara Colombo',
       role: 'passenger',
       phone: '+39 339 5566778',
+      pin: '5566',
+      token: 'demo_token_pass_2',
       pickupLocation: 'Milano Repubblica',
       pickupCoords: { lat: 45.4789, lng: 9.1982 },
       assignedRiderId: rider1Id,
       notes: 'Zaino e scarponi',
-      token: 'demo_token_pass_2',
       createdAt: new Date().toISOString()
     },
     {
@@ -495,11 +499,12 @@ function getInitialSeedData(): DatabaseSchema {
       name: 'Matteo Gatti',
       role: 'passenger',
       phone: '+39 328 4433221',
+      pin: '9999',
+      token: 'demo_token_pass_3',
       pickupLocation: 'Sesto San Giovanni / Rondò',
       pickupCoords: { lat: 45.5342, lng: 9.2274 },
       assignedRiderId: null,
       notes: 'Flessibile, posso arrivare anche a Monza',
-      token: 'demo_token_pass_3',
       createdAt: new Date().toISOString()
     }
   ]

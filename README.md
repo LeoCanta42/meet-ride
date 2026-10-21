@@ -48,9 +48,12 @@ Organizing rides for group events usually ends up in a messy WhatsApp group with
 
 ### 📱 Frictionless Guest Model with Cross-Device Sync
 - **No Sign-Up Required**: Guests only need the event link and shared password.
-- **Cross-Device Recovery**:
-  - **Personal Management Link**: Share your private access URL (`/events/slug?p=token`) to switch between phone and desktop.
-  - **Phone / PIN Reconnect Modal**: Accessing from a new browser? Simply select your name and enter your phone number or 4-digit PIN to restore your profile.
+- **Cross-Device Recovery & Onboarding**:
+  - **Instant Camera QR Code**: Scan right from your desktop screen with your phone camera to open the event already logged in.
+  - **Guided Onboarding Dialog**: Right after joining, guests receive immediate visual confirmation, their magic link, and an overview of their 4-digit PIN.
+  - **Phone / PIN Reconnect Modal**: Accessing from a new browser? Select your name and enter your 4-digit PIN or phone number to restore your seat.
+  - **1-Click Self-Identification**: Tap your name on any car card or waiting list to instantly open the reconnection prompt with your profile pre-selected.
+  - **Personal Management Link**: Share your private access URL (`/events/slug?p=token`) or send it to yourself on WhatsApp with 1 click.
 
 ### 🔒 Privacy & Password Visibility Controls
 - **Eye Toggle Button**: Show/hide passwords across the app (event unlock gate, organizer login, registration, and participant PINs).

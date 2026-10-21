@@ -277,12 +277,12 @@ function formatDate(dateStr: string) {
     </section>
 
     <!-- Features Overview -->
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
-      <div class="surface-card rounded-2xl p-6 space-y-3">
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
+      <div class="surface-card rounded-2xl p-5 space-y-2.5">
         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400">
           <UIcon name="i-lucide-key-round" class="h-5 w-5" />
         </div>
-        <h3 class="font-bold text-slate-900 dark:text-white text-base">
+        <h3 class="font-bold text-slate-900 dark:text-white text-sm">
           {{ t('hero.feature1Title') }}
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -290,11 +290,11 @@ function formatDate(dateStr: string) {
         </p>
       </div>
 
-      <div class="surface-card rounded-2xl p-6 space-y-3">
+      <div class="surface-card rounded-2xl p-5 space-y-2.5">
         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
           <UIcon name="i-lucide-car" class="h-5 w-5" />
         </div>
-        <h3 class="font-bold text-slate-900 dark:text-white text-base">
+        <h3 class="font-bold text-slate-900 dark:text-white text-sm">
           {{ t('hero.feature2Title') }}
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -302,11 +302,23 @@ function formatDate(dateStr: string) {
         </p>
       </div>
 
-      <div class="surface-card rounded-2xl p-6 space-y-3">
+      <div class="surface-card rounded-2xl p-5 space-y-2.5">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400">
+          <UIcon name="i-lucide-smartphone" class="h-5 w-5" />
+        </div>
+        <h3 class="font-bold text-slate-900 dark:text-white text-sm">
+          {{ t('hero.feature4Title') }}
+        </h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          {{ t('hero.feature4Desc') }}
+        </p>
+      </div>
+
+      <div class="surface-card rounded-2xl p-5 space-y-2.5">
         <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-400">
           <UIcon name="i-lucide-route" class="h-5 w-5" />
         </div>
-        <h3 class="font-bold text-slate-900 dark:text-white text-base">
+        <h3 class="font-bold text-slate-900 dark:text-white text-sm">
           {{ t('hero.feature3Title') }}
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">

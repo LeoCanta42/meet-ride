@@ -8,6 +8,7 @@ function sanitizeParticipantForClient(p: Participant, callerTokens: Set<string>)
   return {
     ...rest,
     hasPin: Boolean(pin),
+    pin: isOwner ? pin : undefined,
     token: isOwner ? token : undefined
   }
 }
@@ -51,7 +52,8 @@ export default defineEventHandler(async (event) => {
     [
       ...rawHeaderTokens.split(','),
       typeof query.p === 'string' ? query.p : '',
-      typeof query.token === 'string' ? query.token : ''
+      typeof query.token === 'string' ? query.token : '',
+      typeof query.myToken === 'string' ? query.myToken : ''
     ]
       .map(s => s.trim())
       .filter(Boolean)
@@ -59,6 +61,9 @@ export default defineEventHandler(async (event) => {
 
   // Full data for unlocked guests or organizer
   const eventParticipants = db.participants.filter(p => p.eventId === foundEvent.id)
+
+  const myParticipantRaw = eventParticipants.find(p => p.token && callerTokens.has(p.token)) || null
+
   const riders = eventParticipants.filter(p => p.role === 'rider')
   const passengers = eventParticipants.filter(p => p.role === 'passenger')
 
@@ -103,6 +108,7 @@ export default defineEventHandler(async (event) => {
     isOrganizer,
     cars,
     unassignedPassengers,
+    myParticipant: myParticipantRaw ? sanitizeParticipantForClient(myParticipantRaw, callerTokens) : null,
     totalRiders: riders.length,
     totalPassengers: passengers.length
   }

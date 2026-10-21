@@ -27,6 +27,11 @@ const unlockError = ref('')
 const unlocking = ref(false)
 const isModalOpen = ref(false)
 const showReconnectModal = ref(false)
+const preselectedParticipantId = ref('')
+const showDeviceSyncModal = ref(false)
+const isNewJoin = ref(false)
+const showJoinChoiceModal = ref(false)
+const targetRiderId = ref('')
 const modalInitialData = ref<Participant | null>(null)
 const actionLoading = ref(false)
 
@@ -43,6 +48,32 @@ const allParticipants = computed<Participant[]>(() => {
   }
   return list
 })
+
+function openDeviceSync() {
+  isNewJoin.value = false
+  showDeviceSyncModal.value = true
+}
+
+function handleClaimParticipant(participantId: string) {
+  preselectedParticipantId.value = participantId
+  showReconnectModal.value = true
+}
+
+function handlePromptJoin(riderId?: string) {
+  targetRiderId.value = riderId || ''
+  showJoinChoiceModal.value = true
+}
+
+function handleChoiceNew() {
+  showJoinChoiceModal.value = false
+  openJoinModal('passenger')
+}
+
+function handleChoiceReconnect() {
+  showJoinChoiceModal.value = false
+  preselectedParticipantId.value = ''
+  showReconnectModal.value = true
+}
 
 function copyPersonalLink() {
   if (!currentEvent.value || !myParticipant.value?.token) return
@@ -103,12 +134,24 @@ function openEditModal() {
 }
 
 async function handleParticipantSubmit(data: Partial<Participant>) {
+  const isEdit = !!modalInitialData.value?.id
   const res = await registerParticipant(data)
   if (res.success) {
     toast.add({
       title: t('common.success'),
       color: 'success'
     })
+
+    if (targetRiderId.value && !isEdit && data.role === 'passenger') {
+      await selectCar(targetRiderId.value)
+      targetRiderId.value = ''
+    }
+
+    // Show onboarding sync modal if first time registration
+    if (!isEdit) {
+      isNewJoin.value = true
+      showDeviceSyncModal.value = true
+    }
   } else {
     toast.add({
       title: t('common.error'),
@@ -363,15 +406,15 @@ const totalOccupiedSeats = computed(() => {
 
           <div class="flex items-center flex-wrap gap-2 w-full lg:w-auto">
             <UButton
-              color="neutral"
-              variant="outline"
+              color="primary"
+              variant="subtle"
               size="sm"
-              @click="copyPersonalLink"
+              @click="openDeviceSync"
               class="text-xs font-semibold flex-1 sm:flex-initial justify-center"
-              title="Copia link personale per gestire la tua auto o posto da altri dispositivi"
+              title="Apri su smartphone o sincronizza altri dispositivi"
             >
-              <UIcon name="i-lucide-smartphone" class="h-3.5 w-3.5 mr-1 text-sky-500 shrink-0" />
-              <span>Link altri dispositivi</span>
+              <UIcon name="i-lucide-smartphone" class="h-3.5 w-3.5 mr-1 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>{{ t('eventView.openOnSmartphone') }}</span>
             </UButton>
 
             <UButton
@@ -399,46 +442,73 @@ const totalOccupiedSeats = computed(() => {
           </div>
         </div>
 
-        <!-- Not registered yet: Big Join Prompts -->
-        <div v-else class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div class="min-w-0">
-            <h3 class="text-sm font-bold text-slate-900 dark:text-white">
-              Vuoi partecipare a questo evento?
-            </h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Offri la tua auto o cerca un passaggio comodo con gli altri partecipanti.
-            </p>
-            <div v-if="allParticipants.length > 0" class="mt-2">
-              <button
-                type="button"
-                @click="showReconnectModal = true"
-                class="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1.5 text-left cursor-pointer"
+        <!-- Not registered yet: Clear & Intuitive Join / Reconnect Box -->
+        <div v-else class="space-y-4">
+          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="space-y-1">
+              <div class="inline-flex items-center gap-1.5 rounded-full bg-sky-100/80 px-2.5 py-0.5 text-[10px] font-bold text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
+                <UIcon name="i-lucide-sparkles" class="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                <span>Nessun account necessario</span>
+              </div>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">
+                Vuoi partecipare a questo evento?
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+                Basta indicare il tuo nome per salire a bordo o offrire posti in auto. Il tuo browser ricorderà il tuo posto automaticamente.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2 w-full md:w-auto shrink-0">
+              <UButton
+                color="primary"
+                variant="solid"
+                size="md"
+                @click="openJoinModal('passenger')"
+                class="font-semibold text-xs shadow-sm flex-1 md:flex-initial"
               >
-                <UIcon name="i-lucide-smartphone" class="h-3.5 w-3.5 text-sky-500 shrink-0" />
-                <span>Sei già in lista da un altro dispositivo? Riconnetti il tuo profilo</span>
-              </button>
+                {{ t('eventView.iNeedRide') }}
+              </UButton>
+
+              <UButton
+                color="neutral"
+                variant="outline"
+                size="md"
+                @click="openJoinModal('rider')"
+                class="font-semibold text-xs flex-1 md:flex-initial"
+              >
+                {{ t('eventView.imDriving') }}
+              </UButton>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
-            <UButton
-              color="primary"
-              variant="solid"
-              size="md"
-              @click="openJoinModal('passenger')"
-              class="font-semibold text-xs shadow-sm justify-center w-full sm:w-auto"
-            >
-              {{ t('eventView.iNeedRide') }}
-            </UButton>
+          <!-- Highlighted Reconnect Callout if there are participants -->
+          <div
+            v-if="allParticipants.length > 0"
+            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/70 p-3 dark:bg-slate-800/40"
+          >
+            <div class="flex items-center gap-2.5">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400">
+                <UIcon name="i-lucide-smartphone" class="h-4 w-4" />
+              </div>
+              <div>
+                <span class="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {{ t('eventView.reconnectPromptBadge') }}
+                </span>
+                <span class="text-[11px] text-slate-500 dark:text-slate-400 block leading-tight">
+                  {{ t('eventView.reconnectPromptText') }}
+                </span>
+              </div>
+            </div>
 
             <UButton
               color="neutral"
               variant="outline"
-              size="md"
-              @click="openJoinModal('rider')"
-              class="font-semibold text-xs justify-center w-full sm:w-auto"
+              size="xs"
+              @click="preselectedParticipantId = ''; showReconnectModal = true"
+              class="font-bold text-xs shrink-0 w-full sm:w-auto text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 hover:bg-sky-50 dark:hover:bg-sky-950"
             >
-              {{ t('eventView.imDriving') }}
+              <UIcon name="i-lucide-log-in" class="h-3.5 w-3.5 mr-1" />
+              <span>{{ t('eventView.reconnectPromptBtn') }}</span>
             </UButton>
           </div>
         </div>
@@ -509,7 +579,8 @@ const totalOccupiedSeats = computed(() => {
             :loading="actionLoading"
             @select-car="handleSelectCar"
             @leave-car="handleLeaveCar"
-            @prompt-join="openJoinModal('passenger')"
+            @prompt-join="handlePromptJoin"
+            @claim-participant="handleClaimParticipant"
           />
         </div>
       </div>
@@ -554,14 +625,29 @@ const totalOccupiedSeats = computed(() => {
           <div
             v-for="passenger in unassignedPassengers"
             :key="passenger.id"
-            class="surface-card rounded-xl p-3.5 space-y-1.5 border border-slate-200/80 dark:border-slate-800"
-            :class="passenger.id === myParticipant?.id ? 'ring-2 ring-amber-500 bg-amber-50/20 dark:bg-amber-950/20' : ''"
+            class="surface-card rounded-xl p-3.5 space-y-1.5 border border-slate-200/80 dark:border-slate-800 transition-all"
+            :class="[
+              passenger.id === myParticipant?.id ? 'ring-2 ring-amber-500 bg-amber-50/20 dark:bg-amber-950/20' : '',
+              !myParticipant ? 'hover:border-sky-300 dark:hover:border-sky-800' : ''
+            ]"
           >
             <div class="flex items-center justify-between">
               <span class="font-bold text-slate-900 dark:text-white text-xs">{{ passenger.name }}</span>
-              <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                In cerca
-              </span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  v-if="!myParticipant"
+                  type="button"
+                  @click="handleClaimParticipant(passenger.id)"
+                  class="text-[10px] font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-0.5"
+                  :title="t('eventView.isThisYou')"
+                >
+                  <UIcon name="i-lucide-user-check" class="h-3 w-3" />
+                  <span>{{ t('eventView.isThisYou') }}</span>
+                </button>
+                <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  In cerca
+                </span>
+              </div>
             </div>
 
             <div v-if="passenger.pickupLocation" class="flex items-start gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
@@ -577,6 +663,55 @@ const totalOccupiedSeats = computed(() => {
       </div>
     </div>
 
+    <!-- Join Choice Modal (New vs Reconnect) when unauthenticated clicks Join Car -->
+    <UModal
+      :open="showJoinChoiceModal"
+      @update:open="showJoinChoiceModal = $event"
+      :title="t('joinPromptModal.title')"
+      :description="t('joinPromptModal.subtitle')"
+      :ui="{ content: 'sm:max-w-md' }"
+    >
+      <template #body>
+        <div class="space-y-3">
+          <button
+            type="button"
+            class="w-full flex items-start gap-3 p-3.5 rounded-2xl border border-sky-200 bg-sky-50/50 hover:bg-sky-50 text-left transition-all dark:border-sky-900/60 dark:bg-sky-950/20 dark:hover:bg-sky-950/40"
+            @click="handleChoiceNew"
+          >
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white font-bold">
+              <UIcon name="i-lucide-user-plus" class="h-5 w-5" />
+            </div>
+            <div>
+              <span class="block font-bold text-xs text-slate-900 dark:text-white">
+                {{ t('joinPromptModal.newParticipant') }}
+              </span>
+              <span class="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                {{ t('joinPromptModal.newParticipantDesc') }}
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            class="w-full flex items-start gap-3 p-3.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-left transition-all dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-800"
+            @click="handleChoiceReconnect"
+          >
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 font-bold">
+              <UIcon name="i-lucide-smartphone" class="h-5 w-5" />
+            </div>
+            <div>
+              <span class="block font-bold text-xs text-slate-900 dark:text-white">
+                {{ t('joinPromptModal.alreadyRegistered') }}
+              </span>
+              <span class="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                {{ t('joinPromptModal.alreadyRegisteredDesc') }}
+              </span>
+            </div>
+          </button>
+        </div>
+      </template>
+    </UModal>
+
     <!-- Participant Modal -->
     <ParticipantModal
       v-model:open="isModalOpen"
@@ -584,10 +719,19 @@ const totalOccupiedSeats = computed(() => {
       @submit="handleParticipantSubmit"
     />
 
+    <!-- Device Sync / QR Code / Personal Link Modal -->
+    <DeviceSyncModal
+      v-model:open="showDeviceSyncModal"
+      :event="currentEvent"
+      :participant="myParticipant"
+      :is-new-join="isNewJoin"
+    />
+
     <!-- Reconnect Profile Modal (Cross-device access) -->
     <ReconnectModal
       v-model:open="showReconnectModal"
       :participants="allParticipants"
+      :preselected-participant-id="preselectedParticipantId"
       @reconnected="loadEvent(eventIdOrSlug)"
     />
   </div>

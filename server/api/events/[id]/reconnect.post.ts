@@ -1,4 +1,4 @@
-import { getDb } from '../../../utils/db'
+import { getDb, saveDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer, checkRateLimit, recordFailedAttempt, resetRateLimit } from '../../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -90,6 +90,13 @@ export default defineEventHandler(async (event) => {
   }
 
   resetRateLimit(event, `reconnect:${eventId}`)
+
+  // Ensure participant has a token generated and persisted
+  if (!participant.token) {
+    participant.token = Math.random().toString(36).substring(2) + Date.now().toString(36)
+    await saveDb(db)
+  }
+
   const { pin: _pin, ...safeParticipant } = participant
 
   return {

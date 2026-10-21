@@ -11,7 +11,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select-car', riderId: string): void
   (e: 'leave-car'): void
-  (e: 'prompt-join'): void
+  (e: 'prompt-join', riderId?: string): void
+  (e: 'claim-participant', participantId: string): void
 }>()
 
 const { t } = useI18n()
@@ -59,7 +60,7 @@ function formatEuro(val: number | null | undefined): string {
 
 function handleSeatAction() {
   if (!props.myParticipant) {
-    emit('prompt-join')
+    emit('prompt-join', props.car.rider.id)
     return
   }
 
@@ -191,21 +192,37 @@ function handleSeatAction() {
       <!-- Passengers chips -->
       <div class="flex flex-wrap gap-1.5">
         <!-- Driver seat badge -->
-        <span class="inline-flex items-center gap-1.5 rounded-lg bg-slate-200/90 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 max-w-full" title="Guidatore">
+        <component
+          :is="!myParticipant ? 'button' : 'span'"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg bg-slate-200/90 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 max-w-full transition-all text-left"
+          :class="!myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''"
+          :title="!myParticipant ? t('eventView.isThisYou') : t('car.driver')"
+          @click="!myParticipant ? emit('claim-participant', car.rider.id) : null"
+        >
           <UIcon name="i-lucide-steering-wheel" class="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
           <span class="truncate">{{ car.rider.name }}</span>
-        </span>
+        </component>
 
         <!-- Seated passengers -->
-        <span
+        <component
+          :is="!myParticipant ? 'button' : 'span'"
           v-for="passenger in car.passengers"
           :key="passenger.id"
-          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium max-w-full"
-          :class="passenger.id === myParticipant?.id ? 'bg-sky-600 text-white font-semibold shadow-sm' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium max-w-full transition-all text-left"
+          :class="[
+            passenger.id === myParticipant?.id
+              ? 'bg-sky-600 text-white font-semibold shadow-sm'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+            !myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''
+          ]"
+          :title="!myParticipant ? t('eventView.isThisYou') : undefined"
+          @click="!myParticipant ? emit('claim-participant', passenger.id) : null"
         >
           <UIcon name="i-lucide-user" class="h-3.5 w-3.5 shrink-0" :class="passenger.id === myParticipant?.id ? 'text-white' : 'text-slate-400'" />
           <span class="truncate">{{ passenger.name }}</span>
-        </span>
+        </component>
 
         <!-- Empty seats -->
         <span

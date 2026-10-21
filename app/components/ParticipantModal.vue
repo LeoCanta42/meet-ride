@@ -47,6 +47,20 @@ function formatEuro(val: number): string {
   return Number.isInteger(val) ? `${val}` : val.toFixed(2)
 }
 
+function generateRandomPin() {
+  const code = Math.floor(1000 + Math.random() * 9000).toString()
+  pin.value = code
+  showPin.value = true
+}
+
+function handlePinInput(e: Event) {
+  const target = e.target as HTMLInputElement
+  if (target) {
+    // Keep numbers and letters, strip spaces
+    pin.value = target.value.replace(/\s+/g, '')
+  }
+}
+
 watch(() => props.open, (val) => {
   if (val) {
     if (props.initialData) {
@@ -159,6 +173,7 @@ function handleSubmit() {
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('participantModal.nameLabel') }} *
+              <span class="text-[10px] text-slate-400 font-normal ml-1">{{ t('participantModal.nameHelp') }}</span>
             </label>
             <UInput
               v-model="name"
@@ -182,35 +197,73 @@ function handleSubmit() {
           </div>
         </div>
 
-        <!-- Optional PIN for cross-device access -->
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            PIN personale
-            <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale, es. 4 cifre per accedere da altri dispositivi)</span>
-          </label>
-          <UInput
-            v-model="pin"
-            :type="showPin ? 'text' : 'password'"
-            :placeholder="isEdit && initialData?.hasPin ? '•••• (lascia vuoto per mantenere il PIN attuale)' : 'es. 1234'"
-            maxlength="10"
-            icon="i-lucide-key-round"
-            :ui="{ trailing: 'pe-1' }"
-            class="w-full font-mono"
-          >
-            <template #trailing>
-              <UButton
+        <!-- Cross-Device Quick Access / PIN Box -->
+        <div class="rounded-2xl border border-sky-200/80 bg-sky-50/60 p-3 sm:p-3.5 dark:border-sky-900/60 dark:bg-sky-950/20 space-y-2.5">
+          <div class="flex items-start gap-2.5">
+            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/60 dark:text-sky-300">
+              <UIcon name="i-lucide-smartphone" class="h-4 w-4" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-white">
+                  {{ t('participantModal.deviceSyncCardTitle') }}
+                </h4>
+                <span class="rounded bg-sky-100 px-1.5 py-0.2 text-[9px] font-bold text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                  {{ t('participantModal.deviceSyncCardBadge') }}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                {{ t('participantModal.deviceSyncCardDesc') }}
+              </p>
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-0.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                {{ t('participantModal.pinLabel') }}
+              </label>
+              <button
                 type="button"
-                color="neutral"
-                variant="link"
-                size="sm"
-                :icon="showPin ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                :aria-label="showPin ? t('common.hidePassword') : t('common.showPassword')"
-                tabindex="-1"
-                @pointerdown.prevent
-                @click="showPin = !showPin"
-              />
-            </template>
-          </UInput>
+                @click="generateRandomPin"
+                class="text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 transition-colors"
+              >
+                <UIcon name="i-lucide-sparkles" class="h-3 w-3" />
+                <span>{{ t('participantModal.pinGenerateBtn') }}</span>
+              </button>
+            </div>
+
+            <UInput
+              v-model="pin"
+              :type="showPin ? 'text' : 'password'"
+              :placeholder="isEdit && initialData?.hasPin ? '•••• (lascia vuoto per mantenere il PIN attuale)' : t('participantModal.pinPlaceholder')"
+              maxlength="8"
+              inputmode="numeric"
+              icon="i-lucide-key-round"
+              :ui="{ trailing: 'pe-1' }"
+              class="w-full font-mono font-bold tracking-widest text-center"
+              @input="handlePinInput"
+            >
+              <template #trailing>
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="link"
+                  size="sm"
+                  :icon="showPin ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  :aria-label="showPin ? t('common.hidePassword') : t('common.showPassword')"
+                  tabindex="-1"
+                  @pointerdown.prevent
+                  @click="showPin = !showPin"
+                />
+              </template>
+            </UInput>
+
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+              <UIcon name="i-lucide-info" class="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+              <span>{{ t('participantModal.pinHelp') }}</span>
+            </p>
+          </div>
         </div>
 
         <!-- Rider Fields -->

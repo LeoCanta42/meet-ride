@@ -49,6 +49,7 @@ export function useEvent() {
   async function loadEvent(idOrSlug: string): Promise<boolean> {
     loading.value = true
     try {
+      // 1. Check URL query parameters for personal access token (?p=xxx or ?token=xxx) FIRST
       let queryToken: string | undefined
       if (import.meta.client) {
         try {
@@ -56,14 +57,22 @@ export function useEvent() {
           const q = (route.query.p || route.query.token) as string | undefined
           if (q && typeof q === 'string') {
             queryToken = q.trim()
+            setLocalParticipantToken(idOrSlug, queryToken)
+            const router = useRouter()
+            const newQuery = { ...route.query }
+            delete newQuery.p
+            delete newQuery.token
+            router.replace({ query: newQuery }).catch(() => {})
           }
         } catch {
           // ignore
         }
       }
 
+      const specificToken = getLocalParticipantToken(idOrSlug)
       const candidateTokens = [...getAllLocalParticipantTokens()]
-      if (queryToken) candidateTokens.push(queryToken)
+      if (specificToken && !candidateTokens.includes(specificToken)) candidateTokens.push(specificToken)
+      if (queryToken && !candidateTokens.includes(queryToken)) candidateTokens.push(queryToken)
 
       const res = await $fetch<{
         event: EventItem
@@ -71,6 +80,7 @@ export function useEvent() {
         isOrganizer: boolean
         cars?: CarWithSeats[]
         unassignedPassengers?: Participant[]
+        myParticipant?: Participant | null
       }>(`/api/events/${idOrSlug}`, {
         headers: candidateTokens.length > 0
           ? { 'x-participant-token': candidateTokens.join(',') }
@@ -83,45 +93,17 @@ export function useEvent() {
       cars.value = res.cars || []
       unassignedPassengers.value = res.unassignedPassengers || []
 
-      // Check URL query parameters for personal access token (?p=xxx or ?token=xxx)
-      if (import.meta.client) {
-        try {
-          const route = useRoute()
-          const queryToken = (route.query.p || route.query.token) as string | undefined
-          if (queryToken && typeof queryToken === 'string') {
-            setLocalParticipantToken(res.event.id, queryToken.trim())
-            const router = useRouter()
-            const newQuery = { ...route.query }
-            delete newQuery.p
-            delete newQuery.token
-            router.replace({ query: newQuery }).catch(() => {})
-          }
-        } catch {
-          // ignore
+      // Synchronize myParticipant
+      if (res.myParticipant) {
+        myParticipant.value = res.myParticipant
+        if (res.myParticipant.token) {
+          setLocalParticipantToken(res.event.id, res.myParticipant.token)
         }
-      }
-
-      // Identify current user's participant record if they have registered
-      const token = getLocalParticipantToken(res.event.id)
-      if (token && res.isUnlocked) {
-        let found: Participant | null = null
-        for (const car of cars.value) {
-          if (car.rider.token === token) {
-            found = car.rider
-            break
-          }
-          const p = car.passengers.find((x: Participant) => x.token === token)
-          if (p) {
-            found = p
-            break
-          }
-        }
-        if (!found) {
-          found = unassignedPassengers.value.find((x: Participant) => x.token === token) || null
-        }
-        myParticipant.value = found
       } else {
         myParticipant.value = null
+        if (specificToken) {
+          removeLocalParticipantToken(res.event.id)
+        }
       }
 
       return true
