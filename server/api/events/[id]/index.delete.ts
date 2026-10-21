@@ -1,4 +1,4 @@
-import { getDb, saveDb } from '../../../utils/db'
+import { getDb, deleteEventFromDb } from '../../../utils/db'
 import { getAuthenticatedOrganizer } from '../../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -20,10 +20,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Non puoi eliminare questo evento' })
   }
 
-  // Delete event and related participants
-  db.events = db.events.filter(e => e.id !== id)
-  db.participants = db.participants.filter(p => p.eventId !== id)
-
-  await saveDb(db)
+  await deleteEventFromDb(id!, db)
   return { success: true }
 })

@@ -1,8 +1,10 @@
 import { getDb } from '../../../utils/db'
-import { setEventUnlocked } from '../../../utils/auth'
+import { setEventUnlocked, checkRateLimit, recordFailedAttempt, resetRateLimit } from '../../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const idOrSlug = getRouterParam(event, 'id')
+  checkRateLimit(event, `unlock:${idOrSlug || 'any'}`, 15, 15 * 60 * 1000)
+
   const body = await readBody(event)
   const password = (body?.password || '').trim()
 
@@ -25,12 +27,14 @@ export default defineEventHandler(async (event) => {
   const isMatch = expectedPassword === password.toLowerCase()
 
   if (!isMatch) {
+    recordFailedAttempt(event, `unlock:${idOrSlug}`, 15 * 60 * 1000)
     throw createError({
       statusCode: 403,
       statusMessage: 'Password non corretta'
     })
   }
 
+  resetRateLimit(event, `unlock:${idOrSlug}`)
   setEventUnlocked(event, foundEvent.id)
 
   return { success: true, eventId: foundEvent.id }

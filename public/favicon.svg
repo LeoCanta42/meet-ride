@@ -1,20 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0284c7" />
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0c192c" />
+      <stop offset="55%" stop-color="#0369a1" />
       <stop offset="100%" stop-color="#06b6d4" />
     </linearGradient>
   </defs>
-  <rect width="100" height="100" rx="24" fill="url(#grad)" />
-  <!-- Car icon with group ride symbol -->
-  <path d="M24 64h52c2.2 0 4-1.8 4-4v-8c0-2-1.3-3.8-3.2-4.4L68 44c-1.5-.5-3.1-.1-4.2 1l-3.8 3.8H40l-3.8-3.8c-1.1-1.1-2.7-1.5-4.2-1l-8.8 3.6C21.3 48.2 20 50 20 52v8c0 2.2 1.8 4 4 4z" fill="#ffffff" opacity="0.95"/>
-  <circle cx="34" cy="65" r="7" fill="#0f172a" />
-  <circle cx="34" cy="65" r="3.5" fill="#ffffff" />
-  <circle cx="66" cy="65" r="7" fill="#0f172a" />
-  <circle cx="66" cy="65" r="3.5" fill="#ffffff" />
-  <!-- 2 passenger heads / location pins -->
-  <circle cx="42" cy="33" r="5" fill="#ffffff" />
-  <circle cx="58" cy="33" r="5" fill="#ffffff" />
-  <path d="M35 44c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none" />
-  <path d="M51 44c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none" />
+
+  <!-- Rounded Background -->
+  <rect width="512" height="512" rx="115" fill="#0369a1" />
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+
+  <!-- Subtle Badge Ring -->
+  <circle cx="256" cy="256" r="184" fill="#0f172a" fill-opacity="0.35" />
+  <circle cx="256" cy="256" r="172" fill="#38bdf8" fill-opacity="0.14" />
+
+  <!-- Two People (Driver & Passenger) clearly visible above car -->
+  <!-- Person 1 (Driver - Warm Gold) -->
+  <circle cx="204" cy="126" r="30" fill="#fbbf24" />
+  <path d="M155 204 C155 174 177 160 204 160 C231 160 253 174 253 204 Z" fill="#fbbf24" />
+
+  <!-- Person 2 (Passenger - Bright Sky Cyan) -->
+  <circle cx="308" cy="126" r="30" fill="#38bdf8" />
+  <path d="M259 204 C259 174 281 160 308 160 C335 160 357 174 357 204 Z" fill="#38bdf8" />
+
+  <!-- Car Cabin / Roof -->
+  <path d="M130 282 L166 206 C173 196 184 192 196 192 L316 192 C328 192 339 196 346 206 L382 282 Z" fill="#ffffff" />
+
+  <!-- Windshield (Deep Slate) -->
+  <path d="M156 274 L184 212 L328 212 L356 274 Z" fill="#0f172a" />
+
+  <!-- Steering Wheel Hint -->
+  <path d="M192 256 A17 17 0 0 1 224 256" stroke="#38bdf8" stroke-width="6" stroke-linecap="round" fill="none" />
+
+  <!-- Lower Car Chassis -->
+  <rect x="88" y="268" width="336" height="92" rx="34" fill="#ffffff" />
+
+  <!-- Headlights & Grille -->
+  <rect x="110" y="295" width="46" height="26" rx="11" fill="#fbbf24" />
+  <rect x="356" y="295" width="46" height="26" rx="11" fill="#fbbf24" />
+  <rect x="194" y="303" width="124" height="17" rx="8.5" fill="#0284c7" />
+
+  <!-- Left & Right Wheels -->
+  <circle cx="162" cy="364" r="44" fill="#0f172a" />
+  <circle cx="162" cy="364" r="21" fill="#38bdf8" />
+  <circle cx="162" cy="364" r="8.5" fill="#ffffff" />
+  <circle cx="350" cy="364" r="44" fill="#0f172a" />
+  <circle cx="350" cy="364" r="21" fill="#38bdf8" />
+  <circle cx="350" cy="364" r="8.5" fill="#ffffff" />
 </svg>

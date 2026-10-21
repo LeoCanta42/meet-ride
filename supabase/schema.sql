@@ -56,6 +56,7 @@ create table if not exists public.participants (
   -- Rider car details
   car_model text,
   total_seats integer default 4,
+  price double precision,
   departure_time text,
   departure_location text,
   departure_lat double precision,
@@ -65,6 +66,16 @@ create table if not exists public.participants (
   token text not null,
   created_at timestamptz not null default now()
 );
+
+-- Ensure columns exist when upgrading an older database installation
+alter table public.organizers add column if not exists password_hash text;
+alter table public.participants add column if not exists pin text;
+alter table public.participants add column if not exists price double precision;
+
+-- Ensure table privileges for Supabase roles
+grant all on table public.organizers to anon, authenticated, service_role;
+grant all on table public.events to anon, authenticated, service_role;
+grant all on table public.participants to anon, authenticated, service_role;
 
 -- -----------------------------------------------------------------------------
 -- 2. INDEXES

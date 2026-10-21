@@ -35,6 +35,7 @@ export interface Participant {
   role: ParticipantRole
   phone?: string
   pin?: string
+  hasPin?: boolean
   notes?: string
   // Locations
   pickupLocation?: string
@@ -42,6 +43,7 @@ export interface Participant {
   // Rider specific
   carModel?: string
   totalSeats?: number // e.g. 4
+  price?: number | null // Total car trip cost in EUR (split among people in the car)
   departureTime?: string
   departureLocation?: string
   departureCoords?: Coordinates | null
@@ -59,6 +61,10 @@ export interface CarWithSeats {
   occupiedSeats: number
   availableSeats: number
   isFull: boolean
+  totalPrice?: number | null
+  peopleCount: number
+  pricePerPerson?: number | null
+  pricePerPersonFull?: number | null
 }
 
 export interface OptimizationSuggestion {

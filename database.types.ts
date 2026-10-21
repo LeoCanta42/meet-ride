@@ -103,6 +103,7 @@ export interface Database {
           pickup_lng: number | null
           car_model: string | null
           total_seats: number | null
+          price: number | null
           departure_time: string | null
           departure_location: string | null
           departure_lat: number | null
@@ -124,6 +125,7 @@ export interface Database {
           pickup_lng?: number | null
           car_model?: string | null
           total_seats?: number | null
+          price?: number | null
           departure_time?: string | null
           departure_location?: string | null
           departure_lat?: number | null
@@ -145,6 +147,7 @@ export interface Database {
           pickup_lng?: number | null
           car_model?: string | null
           total_seats?: number | null
+          price?: number | null
           departure_time?: string | null
           departure_location?: string | null
           departure_lat?: number | null

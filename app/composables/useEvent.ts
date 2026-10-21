@@ -17,6 +17,23 @@ export function useEvent() {
     return localStorage.getItem(`mr_p_token_${eventId}`)
   }
 
+  function getAllLocalParticipantTokens(): string[] {
+    if (!import.meta.client) return []
+    const tokens: string[] = []
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('mr_p_token_')) {
+          const val = localStorage.getItem(key)
+          if (val) tokens.push(val)
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return tokens
+  }
+
   function setLocalParticipantToken(eventId: string, token: string) {
     if (import.meta.client) {
       localStorage.setItem(`mr_p_token_${eventId}`, token)
@@ -32,13 +49,33 @@ export function useEvent() {
   async function loadEvent(idOrSlug: string): Promise<boolean> {
     loading.value = true
     try {
+      let queryToken: string | undefined
+      if (import.meta.client) {
+        try {
+          const route = useRoute()
+          const q = (route.query.p || route.query.token) as string | undefined
+          if (q && typeof q === 'string') {
+            queryToken = q.trim()
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const candidateTokens = [...getAllLocalParticipantTokens()]
+      if (queryToken) candidateTokens.push(queryToken)
+
       const res = await $fetch<{
         event: EventItem
         isUnlocked: boolean
         isOrganizer: boolean
         cars?: CarWithSeats[]
         unassignedPassengers?: Participant[]
-      }>(`/api/events/${idOrSlug}`)
+      }>(`/api/events/${idOrSlug}`, {
+        headers: candidateTokens.length > 0
+          ? { 'x-participant-token': candidateTokens.join(',') }
+          : undefined
+      })
 
       currentEvent.value = res.event
       isUnlocked.value = res.isUnlocked

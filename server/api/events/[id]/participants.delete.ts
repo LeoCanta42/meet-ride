@@ -1,4 +1,4 @@
-import { getDb, saveDb } from '../../../utils/db'
+import { getDb, deleteParticipantFromDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -34,6 +34,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Partecipante non trovato' })
   }
 
+  // Security check: only the event organizer or the participant with the matching secret token can delete
+  if (!isOrganizer && (!token || target.token !== token)) {
+    throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a rimuovere questo partecipante' })
+  }
+
   // If this participant was a rider, unassign passengers in their car
   if (target.role === 'rider') {
     db.participants.forEach(p => {
@@ -43,8 +48,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  db.participants = db.participants.filter(p => p.id !== target.id)
-  await saveDb(db)
+  await deleteParticipantFromDb(target.id, db)
 
   return { success: true }
 })

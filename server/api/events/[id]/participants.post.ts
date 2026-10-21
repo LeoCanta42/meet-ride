@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import { getDb, saveDb } from '../../../utils/db'
-import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
+import { isEventUnlocked, getAuthenticatedOrganizer, generateSecureToken } from '../../../utils/auth'
 import type { Participant, ParticipantRole } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -37,12 +37,14 @@ export default defineEventHandler(async (event) => {
     pickupCoords,
     carModel,
     totalSeats,
+    price,
     departureTime,
     departureLocation,
     departureCoords
   } = body || {}
 
-  if (!name || !name.trim()) {
+  const cleanName = typeof name === 'string' ? name.trim().slice(0, 80) : ''
+  if (!cleanName) {
     throw createError({ statusCode: 400, statusMessage: 'Il nome è obbligatorio' })
   }
 
@@ -50,7 +52,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Ruolo non valido' })
   }
 
-  const token = incomingToken || Math.random().toString(36).substring(2) + Date.now().toString(36)
+  const token = (typeof incomingToken === 'string' && incomingToken.trim())
+    ? incomingToken.trim()
+    : generateSecureToken(16)
   const now = new Date().toISOString()
 
   let participantIndex = -1
@@ -67,6 +71,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const parsedSeats = role === 'rider' ? Math.max(1, Math.min(12, parseInt(totalSeats, 10) || 4)) : undefined
+  let parsedPrice: number | null = null
+  if (role === 'rider' && price !== undefined && price !== null && price !== '') {
+    const numPrice = Number(price)
+    if (!Number.isNaN(numPrice) && numPrice >= 0) {
+      parsedPrice = Math.round(Math.min(10000, numPrice) * 100) / 100
+    }
+  }
 
   let updatedOrCreated: Participant
 
@@ -82,22 +93,30 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Preserve existing PIN if the user did not enter a new PIN during edit
+    const resolvedPin =
+      typeof pin === 'string' && pin.trim().length > 0
+        ? pin.trim().slice(0, 20)
+        : existing.pin
+
     updatedOrCreated = {
       id: existing.id,
       eventId: existing.eventId,
       createdAt: existing.createdAt,
-      name: name.trim(),
+      name: cleanName,
       role: role as ParticipantRole,
-      phone: phone ? phone.trim() : undefined,
-      pin: pin !== undefined ? (pin ? pin.trim() : undefined) : existing.pin,
-      notes: notes ? notes.trim() : undefined,
-      pickupLocation: pickupLocation ? pickupLocation.trim() : undefined,
+      phone: typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 40) : undefined,
+      pin: resolvedPin,
+      notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
+      pickupLocation: typeof pickupLocation === 'string' && pickupLocation.trim() ? pickupLocation.trim().slice(0, 150) : undefined,
       pickupCoords: pickupCoords || null,
-      carModel: role === 'rider' ? (carModel || 'Auto').trim() : undefined,
+      carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
-      departureTime: role === 'rider' ? (departureTime || '').trim() : undefined,
-      departureLocation: role === 'rider' ? (departureLocation || '').trim() : undefined,
+      price: role === 'rider' ? parsedPrice : null,
+      departureTime: role === 'rider' ? (typeof departureTime === 'string' ? departureTime.trim().slice(0, 40) : '') : undefined,
+      departureLocation: role === 'rider' ? (typeof departureLocation === 'string' ? departureLocation.trim().slice(0, 150) : '') : undefined,
       departureCoords: role === 'rider' ? departureCoords || null : null,
+      assignedRiderId: role === 'passenger' ? (existing.assignedRiderId || null) : null,
       token: existing.token || token
     }
     db.participants[participantIndex] = updatedOrCreated
@@ -107,17 +126,18 @@ export default defineEventHandler(async (event) => {
     updatedOrCreated = {
       id: newId,
       eventId: foundEvent.id,
-      name: name.trim(),
+      name: cleanName,
       role: role as ParticipantRole,
-      phone: phone ? phone.trim() : undefined,
-      pin: pin ? pin.trim() : undefined,
-      notes: notes ? notes.trim() : undefined,
-      pickupLocation: pickupLocation ? pickupLocation.trim() : undefined,
+      phone: typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 40) : undefined,
+      pin: typeof pin === 'string' && pin.trim() ? pin.trim().slice(0, 20) : undefined,
+      notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
+      pickupLocation: typeof pickupLocation === 'string' && pickupLocation.trim() ? pickupLocation.trim().slice(0, 150) : undefined,
       pickupCoords: pickupCoords || null,
-      carModel: role === 'rider' ? (carModel || 'Auto').trim() : undefined,
+      carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
-      departureTime: role === 'rider' ? (departureTime || '').trim() : undefined,
-      departureLocation: role === 'rider' ? (departureLocation || '').trim() : undefined,
+      price: role === 'rider' ? parsedPrice : null,
+      departureTime: role === 'rider' ? (typeof departureTime === 'string' ? departureTime.trim().slice(0, 40) : '') : undefined,
+      departureLocation: role === 'rider' ? (typeof departureLocation === 'string' ? departureLocation.trim().slice(0, 150) : '') : undefined,
       departureCoords: role === 'rider' ? departureCoords || null : null,
       assignedRiderId: null,
       createdAt: now,
@@ -128,8 +148,12 @@ export default defineEventHandler(async (event) => {
 
   await saveDb(db)
 
+  const { pin: _pin, ...safeParticipant } = updatedOrCreated
   return {
-    participant: updatedOrCreated,
+    participant: {
+      ...safeParticipant,
+      hasPin: Boolean(_pin)
+    },
     token: updatedOrCreated.token
   }
 })

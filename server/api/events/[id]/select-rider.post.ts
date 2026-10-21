@@ -35,6 +35,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Passeggero non trovato' })
   }
 
+  // Security check: only organizer or passenger with matching token can change their car assignment
+  if (!isOrganizer && (!token || passenger.token !== token)) {
+    throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a modificare il posto di questo passeggero' })
+  }
+
   if (passenger.role !== 'passenger') {
     throw createError({ statusCode: 400, statusMessage: 'Solo i passeggeri possono selezionare un guidatore' })
   }

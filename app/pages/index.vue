@@ -209,16 +209,16 @@ function formatDate(dateStr: string) {
           class="surface-card rounded-2xl p-5 hover:shadow-md transition-shadow flex flex-col justify-between"
         >
           <div class="space-y-2">
-            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
               <span class="font-semibold text-sky-600 dark:text-sky-400">
                 {{ formatDate(ev.eventDate) }}
               </span>
-              <span class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+              <span class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-300 max-w-full truncate">
                 🔑 {{ ev.sharedPassword }}
               </span>
             </div>
 
-            <h3 class="font-bold text-slate-900 dark:text-white text-base">
+            <h3 class="font-bold text-slate-900 dark:text-white text-base break-words">
               {{ ev.title }}
             </h3>
 

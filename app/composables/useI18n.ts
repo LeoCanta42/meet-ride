@@ -134,7 +134,14 @@ const translations = {
       leaveCarBtn: 'Lascia quest\'auto',
       youAreInThisCar: 'Sei a bordo di quest\'auto',
       youAreTheDriver: 'Sei il guidatore di quest\'auto',
-      contact: 'Contatto'
+      contact: 'Contatto',
+      totalPrice: 'Costo auto',
+      pricePerPerson: 'a persona',
+      peopleInCar: 'persone in auto',
+      personInCar: 'persona in auto',
+      freeRide: 'Passaggio gratuito',
+      splitWithNext: 'Se sali a bordo',
+      whenFull: 'A pieno carico'
     },
     participantModal: {
       titleJoin: 'Partecipa all\'Evento',
@@ -152,6 +159,9 @@ const translations = {
       carModelPlaceholder: 'es. Fiat Tipo 5 porte Grigia',
       totalSeatsLabel: 'Posti Passeggeri Disponibili',
       totalSeatsHelp: 'Escluso il guidatore (es. 4 posti)',
+      priceLabel: 'Costo Totale Auto (€)',
+      pricePlaceholder: 'es. 40 (lascia vuoto se gratis)',
+      priceHelp: 'Diviso automaticamente per il numero di persone in auto (guidatore + passeggeri)',
       departureLocationLabel: 'Luogo / Zona di Partenza',
       departureLocationPlaceholder: 'es. Milano Lambrate FS o Via Palmanova',
       departureTimeLabel: 'Orario indicativo di partenza',
@@ -181,7 +191,18 @@ const translations = {
       installTitle: 'Installa Meet & Ride',
       installDesc: 'Aggiungi alla schermata home per accedere rapidamente ai tuoi passaggi anche offline.',
       installBtn: 'Installa App',
-      dismissBtn: 'Non ora'
+      downloadBtn: 'Scarica App',
+      dismissBtn: 'Non ora',
+      alreadyInstalled: 'App installata',
+      modalTitle: 'Scarica l\'App Meet & Ride',
+      modalSubtitle: 'Installa l\'applicazione sul tuo telefono o PC per un accesso immediato, a schermo intero e senza occupare memoria.',
+      directInstallBtn: 'Installa Subito l\'App',
+      iosTitle: 'iPhone / iPad (Safari)',
+      iosDesc: 'Tocca il pulsante Condividi in basso in Safari e seleziona "Aggiungi alla schermata Home".',
+      androidTitle: 'Android (Chrome / Browser)',
+      androidDesc: 'Tocca "Installa App" oppure apri il menu del browser (⋮) e scegli "Installa app" / "Aggiungi a schermata Home".',
+      desktopTitle: 'PC / Mac (Chrome / Edge)',
+      desktopDesc: 'Clicca sull\'icona di installazione nella barra degli indirizzi in alto a destra.'
     }
   },
   en: {
@@ -317,7 +338,14 @@ const translations = {
       leaveCarBtn: 'Leave this car',
       youAreInThisCar: 'You are riding in this car',
       youAreTheDriver: 'You are driving this car',
-      contact: 'Contact'
+      contact: 'Contact',
+      totalPrice: 'Car cost',
+      pricePerPerson: 'per person',
+      peopleInCar: 'people in car',
+      personInCar: 'person in car',
+      freeRide: 'Free ride',
+      splitWithNext: 'If you join',
+      whenFull: 'When full'
     },
     participantModal: {
       titleJoin: 'Join Event Carpool',
@@ -335,6 +363,9 @@ const translations = {
       carModelPlaceholder: 'e.g. Blue VW Golf (5 seats)',
       totalSeatsLabel: 'Available Passenger Seats',
       totalSeatsHelp: 'Excluding the driver (e.g. 4 seats)',
+      priceLabel: 'Total Car Trip Cost (€)',
+      pricePlaceholder: 'e.g. 40 (leave empty if free)',
+      priceHelp: 'Automatically split by the number of people in the car (driver + passengers)',
       departureLocationLabel: 'Departure Area / Pickup Spot',
       departureLocationPlaceholder: 'e.g. Central Station or North Metro',
       departureTimeLabel: 'Estimated Departure Time',
@@ -364,7 +395,18 @@ const translations = {
       installTitle: 'Install Meet & Ride',
       installDesc: 'Add to your home screen for quick access to your rides, even offline.',
       installBtn: 'Install App',
-      dismissBtn: 'Not now'
+      downloadBtn: 'Download App',
+      dismissBtn: 'Not now',
+      alreadyInstalled: 'App installed',
+      modalTitle: 'Download Meet & Ride App',
+      modalSubtitle: 'Install the web app on your phone or computer for instant, full-screen access.',
+      directInstallBtn: 'Install App Now',
+      iosTitle: 'iPhone / iPad (Safari)',
+      iosDesc: 'Tap the Share button at the bottom of Safari and select "Add to Home Screen".',
+      androidTitle: 'Android (Chrome / Browser)',
+      androidDesc: 'Tap "Install App" or open the browser menu (⋮) and select "Install app" / "Add to Home screen".',
+      desktopTitle: 'PC / Mac (Chrome / Edge)',
+      desktopDesc: 'Click the install icon in the right side of the address bar.'
     }
   }
 }

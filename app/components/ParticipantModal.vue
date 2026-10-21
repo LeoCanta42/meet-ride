@@ -24,13 +24,28 @@ const notes = ref('')
 // Rider fields
 const carModel = ref('')
 const totalSeats = ref<number>(4)
+const price = ref<string>('')
 const departureLocation = ref('')
 const departureTime = ref('')
 
 // Passenger fields
 const pickupLocation = ref('')
 
-const isEdit = computed(() => !!props.initialData)
+const isEdit = computed(() => Boolean(props.initialData?.id))
+
+const numericPrice = computed(() => {
+  const val = Number(price.value)
+  return !Number.isNaN(val) && val > 0 ? val : 0
+})
+
+const fullCarPeopleCount = computed(() => {
+  const seats = Math.max(1, Math.min(12, Number(totalSeats.value) || 4))
+  return 1 + seats
+})
+
+function formatEuro(val: number): string {
+  return Number.isInteger(val) ? `${val}` : val.toFixed(2)
+}
 
 watch(() => props.open, (val) => {
   if (val) {
@@ -42,6 +57,9 @@ watch(() => props.open, (val) => {
       notes.value = props.initialData.notes || ''
       carModel.value = props.initialData.carModel || ''
       totalSeats.value = props.initialData.totalSeats || 4
+      price.value = props.initialData.price !== undefined && props.initialData.price !== null && props.initialData.price > 0
+        ? String(props.initialData.price)
+        : ''
       departureLocation.value = props.initialData.departureLocation || ''
       departureTime.value = props.initialData.departureTime || ''
       pickupLocation.value = props.initialData.pickupLocation || ''
@@ -54,6 +72,7 @@ watch(() => props.open, (val) => {
       notes.value = ''
       carModel.value = ''
       totalSeats.value = 4
+      price.value = ''
       departureLocation.value = ''
       departureTime.value = ''
       pickupLocation.value = ''
@@ -75,10 +94,12 @@ function handleSubmit() {
   if (role.value === 'rider') {
     payload.carModel = carModel.value.trim() || 'Auto'
     payload.totalSeats = Number(totalSeats.value) || 4
+    payload.price = numericPrice.value > 0 ? Math.round(numericPrice.value * 100) / 100 : null
     payload.departureLocation = departureLocation.value.trim() || undefined
     payload.departureTime = departureTime.value.trim() || undefined
   } else {
     payload.pickupLocation = pickupLocation.value.trim() || undefined
+    payload.price = null
   }
 
   emit('submit', payload)
@@ -91,7 +112,7 @@ function handleSubmit() {
     :open="open"
     @update:open="emit('update:open', $event)"
     :title="isEdit ? t('participantModal.titleEdit') : t('participantModal.titleJoin')"
-    :ui="{ content: 'sm:max-w-lg' }"
+    :ui="{ content: 'sm:max-w-lg max-h-[90dvh] overflow-y-auto' }"
   >
     <template #body>
       <form @submit.prevent="handleSubmit" class="space-y-4">
@@ -100,33 +121,33 @@ function handleSubmit() {
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
             {{ t('participantModal.roleQuestion') }}
           </label>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2.5">
             <button
               type="button"
-              class="flex flex-col items-center justify-center p-3 rounded-xl border text-left transition-all"
+              class="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl border text-center transition-all cursor-pointer"
               :class="role === 'passenger'
                 ? 'border-sky-500 bg-sky-50/60 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-2 ring-sky-500/20'
                 : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'"
               @click="role = 'passenger'"
             >
-              <UIcon name="i-lucide-user" class="h-6 w-6 text-sky-600 dark:text-sky-400 mb-1" />
-              <span class="text-xs font-bold text-center">{{ t('participantModal.rolePassenger') }}</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400 text-center mt-1 leading-tight">
+              <UIcon name="i-lucide-user" class="h-5 w-5 sm:h-6 sm:w-6 text-sky-600 dark:text-sky-400 mb-1 shrink-0" />
+              <span class="text-[11px] sm:text-xs font-bold leading-snug">{{ t('participantModal.rolePassenger') }}</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight line-clamp-2">
                 {{ t('participantModal.rolePassengerDesc') }}
               </span>
             </button>
 
             <button
               type="button"
-              class="flex flex-col items-center justify-center p-3 rounded-xl border text-left transition-all"
+              class="flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl border text-center transition-all cursor-pointer"
               :class="role === 'rider'
                 ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-2 ring-emerald-500/20'
                 : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'"
               @click="role = 'rider'"
             >
-              <UIcon name="i-lucide-car" class="h-6 w-6 text-emerald-600 dark:text-emerald-400 mb-1" />
-              <span class="text-xs font-bold text-center">{{ t('participantModal.roleRider') }}</span>
-              <span class="text-[10px] text-slate-500 dark:text-slate-400 text-center mt-1 leading-tight">
+              <UIcon name="i-lucide-car" class="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600 dark:text-emerald-400 mb-1 shrink-0" />
+              <span class="text-[11px] sm:text-xs font-bold leading-snug">{{ t('participantModal.roleRider') }}</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-tight line-clamp-2">
                 {{ t('participantModal.roleRiderDesc') }}
               </span>
             </button>
@@ -138,7 +159,6 @@ function handleSubmit() {
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('participantModal.nameLabel') }} *
-              <span class="text-[10px] text-slate-400 font-normal ml-1">(anche solo nome o nickname)</span>
             </label>
             <UInput
               v-model="name"
@@ -151,7 +171,7 @@ function handleSubmit() {
           <div>
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('participantModal.phoneLabel') }}
-              <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale)</span>
+              <span class="text-[10px] text-slate-400 font-normal ml-1">({{ t('common.optional') }})</span>
             </label>
             <UInput
               v-model="phone"
@@ -159,7 +179,6 @@ function handleSubmit() {
               type="tel"
               class="w-full"
             />
-            <p class="text-[10px] text-slate-400 mt-0.5">Visibile ai compagni e utile per accedere da altri dispositivi</p>
           </div>
         </div>
 
@@ -167,12 +186,12 @@ function handleSubmit() {
         <div>
           <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
             PIN personale
-            <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale, es. 4 cifre per accedere rapidamente da altri dispositivi)</span>
+            <span class="text-[10px] text-slate-400 font-normal ml-1">(opzionale, es. 4 cifre per accedere da altri dispositivi)</span>
           </label>
           <UInput
             v-model="pin"
             :type="showPin ? 'text' : 'password'"
-            placeholder="es. 1234"
+            :placeholder="isEdit && initialData?.hasPin ? '•••• (lascia vuoto per mantenere il PIN attuale)' : 'es. 1234'"
             maxlength="10"
             icon="i-lucide-key-round"
             :ui="{ trailing: 'pe-1' }"
@@ -219,6 +238,44 @@ function handleSubmit() {
                 max="8"
                 class="w-full"
               />
+            </div>
+          </div>
+
+          <!-- Total Car Price + Automatic Per-Person Split Preview -->
+          <div class="rounded-xl border border-emerald-200/80 bg-emerald-50/40 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 space-y-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
+                <UIcon name="i-lucide-euro" class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{{ t('participantModal.priceLabel') }}</span>
+                <span class="text-[10px] text-slate-400 font-normal">({{ t('common.optional') }})</span>
+              </label>
+              <UInput
+                v-model="price"
+                type="number"
+                min="0"
+                max="10000"
+                step="0.5"
+                :placeholder="t('participantModal.pricePlaceholder')"
+                icon="i-lucide-coins"
+                class="w-full"
+              />
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                {{ t('participantModal.priceHelp') }}
+              </p>
+            </div>
+
+            <!-- Live per-person split preview -->
+            <div
+              v-if="numericPrice > 0"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-3 py-2 text-[11px] border border-emerald-200/60 dark:bg-slate-900/80 dark:border-emerald-900/50"
+            >
+              <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                <UIcon name="i-lucide-calculator" class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Con 1 passeggero (2 persone): <strong>€{{ formatEuro(numericPrice / 2) }}</strong>/testa</span>
+              </div>
+              <div class="font-semibold text-emerald-700 dark:text-emerald-300">
+                {{ t('car.whenFull') }} ({{ fullCarPeopleCount }} persone): €{{ formatEuro(numericPrice / fullCarPeopleCount) }}/testa
+              </div>
             </div>
           </div>
 
@@ -275,7 +332,7 @@ function handleSubmit() {
         </div>
 
         <!-- Buttons -->
-        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div class="flex flex-wrap justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           <UButton
             color="neutral"
             variant="ghost"
