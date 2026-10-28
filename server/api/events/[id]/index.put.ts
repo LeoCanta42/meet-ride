@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { title, description, destination, destinationCoords, eventDate, sharedPassword } = body || {}
+  const { title, description, destination, destinationCoords, eventDate, arrivalTime, sharedPassword, routePlan } = body || {}
 
   const updated = {
     ...existingEvent,
@@ -31,7 +31,9 @@ export default defineEventHandler(async (event) => {
     destination: destination ? destination.trim() : existingEvent.destination,
     destinationCoords: destinationCoords !== undefined ? destinationCoords : existingEvent.destinationCoords,
     eventDate: eventDate ? new Date(eventDate).toISOString() : existingEvent.eventDate,
+    arrivalTime: arrivalTime !== undefined ? (arrivalTime ? String(arrivalTime).trim() : null) : existingEvent.arrivalTime,
     sharedPassword: sharedPassword ? sharedPassword.trim() : existingEvent.sharedPassword,
+    routePlan: routePlan !== undefined ? routePlan : existingEvent.routePlan,
     updatedAt: new Date().toISOString()
   }
 

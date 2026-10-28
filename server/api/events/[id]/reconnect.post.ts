@@ -25,13 +25,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event).catch(() => ({}))
-  const { participantId, credential } = body || {}
+  const { participantId, credential, pin } = body || {}
+  const rawCred = credential || pin
 
-  if (!credential || !String(credential).trim()) {
-    throw createError({ statusCode: 400, statusMessage: 'Inserisci Telefono, PIN o Token' })
+  if (!rawCred || !String(rawCred).trim()) {
+    throw createError({ statusCode: 400, statusMessage: 'Inserisci il PIN o Token' })
   }
 
-  const input = String(credential).trim()
+  const input = String(rawCred).trim()
 
   // Allow direct token match across all participants in this event (for "Link o Token" tab)
   const directTokenParticipant = db.participants.find(
@@ -56,7 +57,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Partecipante non trovato in questo evento' })
   }
 
-  const inputDigits = input.replace(/\D/g, '')
+  // If no PIN was configured for this participant, reconnect by PIN is not possible
+  if (!participant.pin || !participant.pin.trim()) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Nessun PIN impostato per questo profilo. Per accedere da un altro dispositivo, utilizza il tuo Link Personale o contatta l\'organizzatore.'
+    })
+  }
+
   let matched = false
 
   // 1. Direct secret token match
@@ -64,28 +72,16 @@ export default defineEventHandler(async (event) => {
     matched = true
   }
 
-  // 2. PIN match
+  // 2. PIN match (strict secure verification - phone number is NOT allowed for cross-device access)
   if (!matched && participant.pin && input === participant.pin.trim()) {
     matched = true
-  }
-
-  // 3. Phone number match (comparing at least last 6 digits to prevent short-digit guessing)
-  if (!matched && participant.phone && inputDigits.length >= 6) {
-    const phoneDigits = participant.phone.replace(/\D/g, '')
-    if (
-      phoneDigits === inputDigits ||
-      (phoneDigits.length >= 6 && phoneDigits.endsWith(inputDigits)) ||
-      (phoneDigits.length >= 6 && inputDigits.endsWith(phoneDigits))
-    ) {
-      matched = true
-    }
   }
 
   if (!matched) {
     recordFailedAttempt(event, `reconnect:${eventId}`, 15 * 60 * 1000)
     throw createError({
       statusCode: 401,
-      statusMessage: 'Telefono o PIN errato. Verifica i dati inseriti al momento dell\'iscrizione.'
+      statusMessage: 'PIN errato. Inserisci il codice PIN scelto al momento dell\'iscrizione.'
     })
   }
 

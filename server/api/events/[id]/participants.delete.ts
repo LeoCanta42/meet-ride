@@ -1,4 +1,4 @@
-import { getDb, deleteParticipantFromDb } from '../../../utils/db'
+import { getDb, deleteParticipantsFromDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -25,10 +25,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Non autorizzato' })
   }
 
-  const target = db.participants.find(p =>
-    p.eventId === foundEvent.id &&
-    ((participantId && p.id === participantId) || (token && p.token === token))
-  )
+  const target = participantId
+    ? db.participants.find(p => p.eventId === foundEvent.id && p.id === participantId)
+    : db.participants.find(p => p.eventId === foundEvent.id && token && p.token === token)
 
   if (!target) {
     throw createError({ statusCode: 404, statusMessage: 'Partecipante non trovato' })
@@ -39,6 +38,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a rimuovere questo partecipante' })
   }
 
+  const idsToDelete: string[] = [target.id]
+
   // If this participant was a rider, unassign passengers in their car
   if (target.role === 'rider') {
     db.participants.forEach(p => {
@@ -48,7 +49,20 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await deleteParticipantFromDb(target.id, db)
+  // If the target is a primary participant (no ownerParticipantId), also clean up any hosted cars owned by them
+  if (!target.ownerParticipantId) {
+    const ownedCars = db.participants.filter(p => p.ownerParticipantId === target.id && p.eventId === foundEvent.id)
+    for (const car of ownedCars) {
+      idsToDelete.push(car.id)
+      db.participants.forEach(p => {
+        if (p.assignedRiderId === car.id) {
+          p.assignedRiderId = null
+        }
+      })
+    }
+  }
+
+  await deleteParticipantsFromDb(idsToDelete, db)
 
   return { success: true }
 })

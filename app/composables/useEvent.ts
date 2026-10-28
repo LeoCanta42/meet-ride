@@ -47,6 +47,17 @@ export function useEvent() {
   }
 
   async function loadEvent(idOrSlug: string): Promise<boolean> {
+    if (!idOrSlug) return false
+
+    // Clear stale state if switching to a different event
+    if (currentEvent.value && currentEvent.value.id !== idOrSlug && currentEvent.value.slug !== idOrSlug) {
+      currentEvent.value = null
+      isUnlocked.value = false
+      cars.value = []
+      unassignedPassengers.value = []
+      myParticipant.value = null
+    }
+
     loading.value = true
     try {
       // 1. Check URL query parameters for personal access token (?p=xxx or ?token=xxx) FIRST
@@ -129,32 +140,167 @@ export function useEvent() {
     }
   }
 
-  async function registerParticipant(data: Partial<Participant>): Promise<{ success: boolean; error?: string }> {
+  async function registerParticipant(data: Partial<Participant> & { isAdditionalCar?: boolean }): Promise<{ success: boolean; error?: string }> {
     if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
 
     try {
       const token = getLocalParticipantToken(currentEvent.value.id) || undefined
+      const isAdditional = Boolean(data.isAdditionalCar)
+
       const res = await $fetch<{ participant: Participant; token: string }>(
         `/api/events/${currentEvent.value.id}/participants`,
         {
           method: 'POST',
           body: {
             ...data,
-            id: myParticipant.value?.id,
+            id: data.id || (!isAdditional ? myParticipant.value?.id : undefined),
             token
           }
         }
       )
 
-      if (res.token) {
+      if (res.token && !getLocalParticipantToken(currentEvent.value.id)) {
         setLocalParticipantToken(currentEvent.value.id, res.token)
       }
-      myParticipant.value = res.participant
+
+      if (!isAdditional || !myParticipant.value) {
+        myParticipant.value = res.participant
+      }
 
       await loadEvent(currentEvent.value.id)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.data?.statusMessage || 'Errore nella registrazione' }
+    }
+  }
+
+  async function deleteCar(riderId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+    const token = getLocalParticipantToken(currentEvent.value.id) || undefined
+    try {
+      await $fetch(`/api/events/${currentEvent.value.id}/participants`, {
+        method: 'DELETE',
+        body: {
+          participantId: riderId,
+          token
+        }
+      })
+      if (myParticipant.value?.id === riderId) {
+        myParticipant.value = null
+        removeLocalParticipantToken(currentEvent.value.id)
+      }
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nella rimozione della vettura' }
+    }
+  }
+
+  // Organizer: create participant without overriding current session token
+  async function createParticipantAsOrganizer(data: Partial<Participant>): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      await $fetch(`/api/events/${currentEvent.value.id}/participants`, {
+        method: 'POST',
+        body: {
+          ...data,
+          isOrganizerAction: true
+        }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nella creazione del partecipante' }
+    }
+  }
+
+  // Organizer: update any participant directly
+  async function updateParticipantAsOrganizer(participantId: string, data: Partial<Participant>): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      await $fetch(`/api/events/${currentEvent.value.id}/participants`, {
+        method: 'POST',
+        body: {
+          ...data,
+          id: participantId,
+          isOrganizerAction: true
+        }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nella modifica del partecipante' }
+    }
+  }
+
+  // Organizer: delete any participant
+  async function deleteParticipantAsOrganizer(participantId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      await $fetch(`/api/events/${currentEvent.value.id}/participants`, {
+        method: 'DELETE',
+        body: { participantId }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nell\'eliminazione del partecipante' }
+    }
+  }
+
+  // Organizer: assign or move any passenger to a car
+  async function assignPassengerAsOrganizer(passengerId: string, riderId: string | null): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      await $fetch(`/api/events/${currentEvent.value.id}/select-rider`, {
+        method: 'POST',
+        body: { passengerId, riderId }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nell\'assegnazione del passeggero' }
+    }
+  }
+
+  // Organizer: update event settings (including arrival time)
+  async function updateEventDetails(payload: Partial<EventItem>): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      const res = await $fetch<{ event: EventItem }>(`/api/events/${currentEvent.value.id}`, {
+        method: 'PUT',
+        body: payload
+      })
+      currentEvent.value = res.event
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nell\'aggiornamento dell\'evento' }
+    }
+  }
+
+  // Feature 4: Calculate convoy route with Gemini AI
+  async function calculateConvoyRoute(): Promise<{ success: boolean; routePlan?: any; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      const res = await $fetch<{ success: boolean; routePlan: any }>(
+        `/api/events/${currentEvent.value.id}/route`,
+        { method: 'POST' }
+      )
+      if (res.routePlan) {
+        currentEvent.value.routePlan = res.routePlan
+      }
+      await loadEvent(currentEvent.value.id)
+      return { success: true, routePlan: res.routePlan }
+    } catch (err: any) {
+      console.error('Error calculating convoy route:', err)
+      return { success: false, error: err.data?.statusMessage || 'Errore nel calcolo del percorso con Gemini AI' }
     }
   }
 
@@ -267,6 +413,7 @@ export function useEvent() {
     destination: string
     destinationCoords?: { lat: number; lng: number } | null
     eventDate: string
+    arrivalTime?: string | null
     sharedPassword: string
   }): Promise<{ success: boolean; event?: EventItem; error?: string }> {
     try {
@@ -305,10 +452,17 @@ export function useEvent() {
     loadEvent,
     unlockEvent,
     registerParticipant,
+    createParticipantAsOrganizer,
+    updateParticipantAsOrganizer,
+    deleteParticipantAsOrganizer,
+    assignPassengerAsOrganizer,
+    updateEventDetails,
+    calculateConvoyRoute,
     reconnectParticipant,
     getLocalParticipantToken,
     setLocalParticipantToken,
     leaveEvent,
+    deleteCar,
     selectCar,
     optimizeSeats,
     loadMyEvents,

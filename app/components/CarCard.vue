@@ -6,6 +6,7 @@ const props = defineProps<{
   car: CarWithSeats
   myParticipant?: Participant | null
   loading?: boolean
+  isOrganizer?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -13,12 +14,21 @@ const emit = defineEmits<{
   (e: 'leave-car'): void
   (e: 'prompt-join', riderId?: string): void
   (e: 'claim-participant', participantId: string): void
+  (e: 'edit-car', rider: Participant): void
+  (e: 'delete-car', riderId: string): void
+  (e: 'remove-passenger', passengerId: string): void
+  (e: 'show-passenger', passenger: Participant, car: CarWithSeats): void
 }>()
 
 const { t } = useI18n()
 
 const isMyCar = computed(() => {
-  return props.myParticipant?.id === props.car.rider.id
+  if (!props.myParticipant && !props.car.rider.token) return false
+  return (
+    props.myParticipant?.id === props.car.rider.id ||
+    (Boolean(props.car.rider.ownerParticipantId) && props.car.rider.ownerParticipantId === props.myParticipant?.id) ||
+    Boolean(props.car.rider.token)
+  )
 })
 
 const isSeatedInThisCar = computed(() => {
@@ -83,8 +93,13 @@ function handleSeatAction() {
     <!-- Top banner / tags (responsive, no overlap on narrow screens) -->
     <div class="flex flex-wrap items-start justify-between gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
       <div class="flex items-start gap-3 min-w-0 flex-1">
-        <div class="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-sky-600 dark:text-sky-400 font-bold">
-          <UIcon name="i-lucide-car-front" class="h-5 w-5 sm:h-6 sm:w-6" />
+        <div
+          class="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl font-bold"
+          :class="car.rider.hasDriver === false
+            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+            : 'bg-slate-100 dark:bg-slate-800 text-sky-600 dark:text-sky-400'"
+        >
+          <UIcon :name="car.rider.hasDriver === false ? 'i-lucide-car' : 'i-lucide-car-front'" class="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-1.5">
@@ -92,7 +107,14 @@ function handleSeatAction() {
               {{ car.rider.name }}
             </h4>
             <span
-              v-if="isMyCar"
+              v-if="car.rider.hasDriver === false"
+              class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300 shrink-0 inline-flex items-center gap-1"
+            >
+              <UIcon name="i-lucide-alert-circle" class="h-3 w-3" />
+              {{ isMyCar ? 'Messa a disposizione da te' : 'Senza autista' }}
+            </span>
+            <span
+              v-else-if="isMyCar"
               class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0"
             >
               {{ t('car.youAreTheDriver') }}
@@ -110,13 +132,35 @@ function handleSeatAction() {
         </div>
       </div>
 
-      <!-- Capacity pill -->
-      <div
-        class="shrink-0 rounded-full px-2.5 py-1 text-[11px] sm:text-xs font-semibold"
-        :class="car.isFull ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'"
-      >
-        <span v-if="car.isFull">{{ t('car.seatsFull') }}</span>
-        <span v-else>{{ car.availableSeats }} / {{ car.totalSeats }} {{ t('car.seats') }}</span>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Organizer or Owner Edit / Delete Controls -->
+        <template v-if="isOrganizer || isMyCar">
+          <button
+            type="button"
+            class="p-1 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            :title="isOrganizer ? 'Modifica vettura / guidatore' : 'Modifica questa vettura'"
+            @click="emit('edit-car', car.rider)"
+          >
+            <UIcon name="i-lucide-pencil" class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            class="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            :title="isOrganizer ? 'Rimuovi vettura dall\'evento' : 'Rimuovi questa vettura'"
+            @click="emit('delete-car', car.rider.id)"
+          >
+            <UIcon name="i-lucide-trash-2" class="h-4 w-4" />
+          </button>
+        </template>
+
+        <!-- Capacity pill -->
+        <div
+          class="rounded-full px-2.5 py-1 text-[11px] sm:text-xs font-semibold"
+          :class="car.isFull ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'"
+        >
+          <span v-if="car.isFull">{{ t('car.seatsFull') }}</span>
+          <span v-else>{{ car.availableSeats }} / {{ car.totalSeats }} {{ t('car.seats') }}</span>
+        </div>
       </div>
     </div>
 
@@ -195,34 +239,62 @@ function handleSeatAction() {
         <component
           :is="!myParticipant ? 'button' : 'span'"
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg bg-slate-200/90 px-2.5 py-1 text-xs font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 max-w-full transition-all text-left"
-          :class="!myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''"
-          :title="!myParticipant ? t('eventView.isThisYou') : t('car.driver')"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold max-w-full transition-all text-left"
+          :class="[
+            car.rider.hasDriver === false
+              ? 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-900/60'
+              : 'bg-slate-200/90 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+            !myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''
+          ]"
+          :title="!myParticipant ? t('eventView.isThisYou') : (car.rider.hasDriver === false ? 'Auto senza autista' : t('car.driver'))"
           @click="!myParticipant ? emit('claim-participant', car.rider.id) : null"
         >
-          <UIcon name="i-lucide-steering-wheel" class="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-          <span class="truncate">{{ car.rider.name }}</span>
+          <UIcon
+            :name="car.rider.hasDriver === false ? 'i-lucide-alert-circle' : 'i-lucide-steering-wheel'"
+            class="h-3.5 w-3.5 shrink-0"
+            :class="car.rider.hasDriver === false ? 'text-amber-600' : 'text-sky-600 dark:text-sky-400'"
+          />
+          <span class="truncate">
+            {{ car.rider.hasDriver === false ? (car.rider.name + ' • Cerca autista') : car.rider.name }}
+          </span>
         </component>
 
         <!-- Seated passengers -->
-        <component
-          :is="!myParticipant ? 'button' : 'span'"
+        <div
           v-for="passenger in car.passengers"
           :key="passenger.id"
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium max-w-full transition-all text-left"
+          class="inline-flex items-center rounded-lg max-w-full transition-all text-left"
           :class="[
             passenger.id === myParticipant?.id
               ? 'bg-sky-600 text-white font-semibold shadow-sm'
-              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-            !myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
           ]"
-          :title="!myParticipant ? t('eventView.isThisYou') : undefined"
-          @click="!myParticipant ? emit('claim-participant', passenger.id) : null"
         >
-          <UIcon name="i-lucide-user" class="h-3.5 w-3.5 shrink-0" :class="passenger.id === myParticipant?.id ? 'text-white' : 'text-slate-400'" />
-          <span class="truncate">{{ passenger.name }}</span>
-        </component>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium max-w-full truncate hover:opacity-85 cursor-pointer rounded-l-lg transition-all"
+            :title="'Visualizza dettagli di ' + passenger.name"
+            @click="emit('show-passenger', passenger, car)"
+          >
+            <UIcon
+              name="i-lucide-user"
+              class="h-3.5 w-3.5 shrink-0"
+              :class="passenger.id === myParticipant?.id ? 'text-white' : 'text-slate-400'"
+            />
+            <span class="truncate">{{ passenger.name }}</span>
+          </button>
+
+          <!-- Organizer button to remove passenger from this car -->
+          <button
+            v-if="isOrganizer"
+            type="button"
+            class="px-1.5 py-1 text-slate-400 hover:text-red-500 rounded-r-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            title="Rimuovi da quest'auto"
+            @click.stop="emit('remove-passenger', passenger.id)"
+          >
+            <UIcon name="i-lucide-x" class="h-3 w-3" />
+          </button>
+        </div>
 
         <!-- Empty seats -->
         <span
@@ -238,9 +310,9 @@ function handleSeatAction() {
 
     <!-- Actions -->
     <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-      <!-- If current user is the driver -->
+      <!-- If current user is the driver/owner -->
       <div v-if="isMyCar" class="text-center text-xs text-slate-500 py-1 font-medium">
-        {{ t('car.youAreTheDriver') }}
+        {{ car.rider.hasDriver === false ? 'Hai messo a disposizione questa vettura' : t('car.youAreTheDriver') }}
       </div>
 
       <!-- If current user is already in this car -->

@@ -34,8 +34,10 @@ create table if not exists public.events (
   destination_lat double precision,
   destination_lng double precision,
   event_date timestamptz not null,
+  arrival_time text,
   shared_password text not null,
   status text not null default 'active',
+  route_plan jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -61,6 +63,8 @@ create table if not exists public.participants (
   departure_location text,
   departure_lat double precision,
   departure_lng double precision,
+  has_driver boolean default true,
+  owner_participant_id uuid references public.participants(id) on delete cascade,
   -- Seat assignment
   assigned_rider_id uuid references public.participants(id) on delete set null,
   token text not null,
@@ -69,8 +73,12 @@ create table if not exists public.participants (
 
 -- Ensure columns exist when upgrading an older database installation
 alter table public.organizers add column if not exists password_hash text;
+alter table public.events add column if not exists arrival_time text;
+alter table public.events add column if not exists route_plan jsonb;
 alter table public.participants add column if not exists pin text;
 alter table public.participants add column if not exists price double precision;
+alter table public.participants add column if not exists has_driver boolean default true;
+alter table public.participants add column if not exists owner_participant_id uuid;
 
 -- Ensure table privileges for Supabase roles
 grant all on table public.organizers to anon, authenticated, service_role;

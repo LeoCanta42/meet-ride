@@ -48,6 +48,11 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico', sizes: 'any' },
         { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' }
+      ],
+      script: [
+        {
+          innerHTML: `window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__mr_bip=e;window.dispatchEvent(new CustomEvent('mr-bip-ready'));});`
+        }
       ]
     }
   },
@@ -77,11 +82,8 @@ export default defineNuxtConfig({
     registerType: 'autoUpdate',
     registerWebManifestInRouteRules: true,
     devOptions: {
-      enabled: false,
+      enabled: true,
       suppressWarnings: true
-    },
-    client: {
-      installPrompt: 'meet-ride:install-dismissed'
     },
     manifest: {
       id: '/',

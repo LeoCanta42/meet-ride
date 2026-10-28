@@ -62,7 +62,10 @@ export default defineEventHandler(async (event) => {
   // Full data for unlocked guests or organizer
   const eventParticipants = db.participants.filter(p => p.eventId === foundEvent.id)
 
-  const myParticipantRaw = eventParticipants.find(p => p.token && callerTokens.has(p.token)) || null
+  const myParticipantRaw =
+    eventParticipants.find(p => p.token && callerTokens.has(p.token) && !p.ownerParticipantId) ||
+    eventParticipants.find(p => p.token && callerTokens.has(p.token)) ||
+    null
 
   const riders = eventParticipants.filter(p => p.role === 'rider')
   const passengers = eventParticipants.filter(p => p.role === 'passenger')
@@ -73,10 +76,11 @@ export default defineEventHandler(async (event) => {
       .map(p => sanitizeParticipantForClient(p, callerTokens))
     const total = rider.totalSeats || 4
     const occupied = carPassengers.length
-    const peopleCount = 1 + occupied // Driver + seated passengers currently in the car
+    const hasDriver = rider.hasDriver !== false
+    const peopleCount = (hasDriver ? 1 : 0) + occupied
     const totalPrice = typeof rider.price === 'number' && rider.price > 0 ? rider.price : null
-    const pricePerPerson = totalPrice !== null ? Math.round((totalPrice / peopleCount) * 100) / 100 : null
-    const pricePerPersonFull = totalPrice !== null ? Math.round((totalPrice / (1 + total)) * 100) / 100 : null
+    const pricePerPerson = totalPrice !== null && peopleCount > 0 ? Math.round((totalPrice / peopleCount) * 100) / 100 : null
+    const pricePerPersonFull = totalPrice !== null ? Math.round((totalPrice / ((hasDriver ? 1 : 0) + total)) * 100) / 100 : null
 
     return {
       rider: sanitizeParticipantForClient(rider, callerTokens),
@@ -88,7 +92,8 @@ export default defineEventHandler(async (event) => {
       totalPrice,
       peopleCount,
       pricePerPerson,
-      pricePerPersonFull
+      pricePerPersonFull,
+      hasDriver
     }
   })
 

@@ -19,9 +19,11 @@ export interface EventItem {
   destination: string
   destinationCoords?: Coordinates | null
   eventDate: string
+  arrivalTime?: string | null // Desired arrival time (e.g. "20:30")
   sharedPassword?: string // organizer sees it or stored on server
   hasPassword?: boolean // public flag
   status: 'active' | 'archived'
+  routePlan?: ConvoyRoutePlan | null
   createdAt: string
   updatedAt: string
 }
@@ -47,6 +49,9 @@ export interface Participant {
   departureTime?: string
   departureLocation?: string
   departureCoords?: Coordinates | null
+  hasDriver?: boolean // default true; if false, vehicle is hosted without a driver
+  ownerParticipantId?: string | null // if vehicle belongs to another participant (2nd car)
+  secondaryVehicle?: Partial<Participant> | null
   // Passenger specific
   assignedRiderId?: string | null
   // System
@@ -65,6 +70,48 @@ export interface CarWithSeats {
   peopleCount: number
   pricePerPerson?: number | null
   pricePerPersonFull?: number | null
+  hasDriver?: boolean
+}
+
+export interface ConvoyPassengerAssignment {
+  passengerId: string
+  passengerName: string
+  assignedRiderId: string
+  carLabel: string
+  reason: string
+}
+
+export interface ConvoyUnassignedPassenger {
+  passengerId: string
+  passengerName: string
+  reason: string
+}
+
+export interface ConvoyWaypoint {
+  name: string
+  type: 'start' | 'pickup' | 'meeting_point' | 'destination'
+  time: string
+  carNames: string[]
+  lat: number
+  lng: number
+  description: string
+}
+
+export interface ConvoyStep {
+  step: number
+  time: string
+  instruction: string
+}
+
+export interface ConvoyRoutePlan {
+  summary: string
+  arrivalTime: string
+  totalConvoyDistanceKm?: number
+  waypoints: ConvoyWaypoint[]
+  steps: ConvoyStep[]
+  passengerAssignments?: ConvoyPassengerAssignment[]
+  unassignedPassengers?: ConvoyUnassignedPassenger[]
+  calculatedAt: string
 }
 
 export interface OptimizationSuggestion {

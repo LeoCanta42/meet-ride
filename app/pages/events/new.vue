@@ -11,6 +11,7 @@ const toast = useToast()
 const title = ref('')
 const destination = ref('')
 const eventDate = ref('')
+const arrivalTime = ref('20:30')
 const sharedPassword = ref('')
 const showPassword = ref(true)
 const description = ref('')
@@ -21,8 +22,9 @@ const errorMessage = ref('')
 onMounted(() => {
   const d = new Date()
   d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7))
-  d.setHours(9, 0, 0, 0)
+  d.setHours(20, 30, 0, 0)
   eventDate.value = d.toISOString().slice(0, 16)
+  arrivalTime.value = '20:30'
   generatePassword()
 })
 
@@ -52,6 +54,7 @@ async function handleSubmit() {
       title: title.value.trim(),
       destination: destination.value.trim(),
       eventDate: new Date(eventDate.value).toISOString(),
+      arrivalTime: arrivalTime.value.trim() || undefined,
       sharedPassword: sharedPassword.value.trim(),
       description: description.value.trim()
     })
@@ -105,9 +108,9 @@ async function handleSubmit() {
           />
         </div>
 
-        <!-- Destination & Date -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+        <!-- Destination, Date & Arrival Time -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-1">
             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('events.destination') }} *
             </label>
@@ -131,6 +134,22 @@ async function handleSubmit() {
               required
               class="w-full"
             />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Orario di arrivo *
+            </label>
+            <UInput
+              v-model="arrivalTime"
+              placeholder="es. 20:30"
+              icon="i-lucide-clock"
+              required
+              class="w-full font-mono font-medium"
+            />
+            <span class="text-[10px] text-slate-400 mt-1 block">
+              Usato dall'AI per calcolare partenze e ritrovi
+            </span>
           </div>
         </div>
 

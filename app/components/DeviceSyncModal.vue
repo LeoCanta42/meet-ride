@@ -153,7 +153,7 @@ function shareViaWhatsApp() {
             @click="activeTab = 'link'"
           >
             <UIcon name="i-lucide-link-2" class="h-3.5 w-3.5" />
-            <span>Link Magico</span>
+            <span>Link Personale</span>
           </button>
 
           <button
@@ -165,7 +165,7 @@ function shareViaWhatsApp() {
             @click="activeTab = 'pin'"
           >
             <UIcon name="i-lucide-key-round" class="h-3.5 w-3.5" />
-            <span>PIN / Telefono</span>
+            <span>Codice PIN</span>
           </button>
         </div>
 
@@ -193,7 +193,7 @@ function shareViaWhatsApp() {
           </div>
         </div>
 
-        <!-- Tab 2: Link Magico -->
+        <!-- Tab 2: Link Personale -->
         <div v-else-if="activeTab === 'link'" class="space-y-3 py-1">
           <div>
             <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1">
@@ -235,7 +235,7 @@ function shareViaWhatsApp() {
           </div>
         </div>
 
-        <!-- Tab 3: PIN / Phone -->
+        <!-- Tab 3: PIN -->
         <div v-else class="space-y-3 py-1">
           <div>
             <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1">
@@ -252,19 +252,14 @@ function shareViaWhatsApp() {
               <span class="font-bold text-slate-900 dark:text-white">{{ participant?.name }}</span>
             </div>
 
-            <div v-if="participant?.pin" class="flex items-center justify-between text-xs py-1 border-b border-slate-200/60 dark:border-slate-800">
+            <div v-if="participant?.pin" class="flex items-center justify-between text-xs py-1">
               <span class="text-slate-500 dark:text-slate-400">{{ t('syncModal.yourPinLabel') }}</span>
               <span class="font-mono font-black text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-950 px-2 py-0.5 rounded text-sm tracking-wider">
                 {{ participant.pin }}
               </span>
             </div>
 
-            <div v-if="participant?.phone" class="flex items-center justify-between text-xs py-1">
-              <span class="text-slate-500 dark:text-slate-400">{{ t('syncModal.yourPhoneLabel') }}</span>
-              <span class="font-mono font-semibold text-slate-800 dark:text-slate-200">{{ participant.phone }}</span>
-            </div>
-
-            <div v-if="!participant?.pin && !participant?.phone" class="text-[11px] text-amber-600 dark:text-amber-400 pt-1">
+            <div v-else class="text-[11px] text-amber-600 dark:text-amber-400 pt-1">
               {{ t('syncModal.noPinNotice') }}
             </div>
           </div>

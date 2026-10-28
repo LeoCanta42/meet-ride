@@ -135,7 +135,7 @@ Rispondi ESCLUSIVAMENTE con un JSON valido conforme al seguente schema:
   const ai = new GoogleGenAI({ apiKey: resolvedKey })
 
   // Try candidate models
-  const models = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.5-flash']
   let lastError: any = null
 
   for (const modelName of models) {

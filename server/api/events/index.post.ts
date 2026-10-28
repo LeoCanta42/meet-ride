@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { title, description, destination, destinationCoords, eventDate, sharedPassword } = body || {}
+  const { title, description, destination, destinationCoords, eventDate, arrivalTime, sharedPassword } = body || {}
 
   if (!title || !destination || !eventDate || !sharedPassword) {
     throw createError({
@@ -35,8 +35,10 @@ export default defineEventHandler(async (event) => {
     destination: destination.trim(),
     destinationCoords: destinationCoords || null,
     eventDate: new Date(eventDate).toISOString(),
+    arrivalTime: typeof arrivalTime === 'string' && arrivalTime.trim() ? arrivalTime.trim() : null,
     sharedPassword: sharedPassword.trim(),
     status: 'active',
+    routePlan: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }

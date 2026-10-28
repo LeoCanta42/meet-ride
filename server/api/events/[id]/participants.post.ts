@@ -40,7 +40,11 @@ export default defineEventHandler(async (event) => {
     price,
     departureTime,
     departureLocation,
-    departureCoords
+    departureCoords,
+    hasDriver,
+    ownerParticipantId,
+    isAdditionalCar,
+    isOrganizerAction
   } = body || {}
 
   const cleanName = typeof name === 'string' ? name.trim().slice(0, 80) : ''
@@ -52,9 +56,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Ruolo non valido' })
   }
 
-  const token = (typeof incomingToken === 'string' && incomingToken.trim())
-    ? incomingToken.trim()
-    : generateSecureToken(16)
+  // Location validation: mandatory for both rider and passenger
+  let cleanDepartureLocation = ''
+  let cleanPickupLocation = ''
+
+  if (role === 'rider') {
+    cleanDepartureLocation = typeof departureLocation === 'string' ? departureLocation.trim().slice(0, 150) : ''
+    if (!cleanDepartureLocation) {
+      throw createError({ statusCode: 400, statusMessage: 'Il luogo di partenza è obbligatorio per i guidatori' })
+    }
+  } else if (role === 'passenger') {
+    cleanPickupLocation = typeof pickupLocation === 'string' ? pickupLocation.trim().slice(0, 150) : ''
+    if (!cleanPickupLocation) {
+      throw createError({ statusCode: 400, statusMessage: 'Il luogo di ritrovo/partenza è obbligatorio per i passeggeri' })
+    }
+  }
+
+  // If this is an organizer creating on behalf of another user, generate an independent token
+  const token = (isOrganizer && isOrganizerAction && !participantId)
+    ? generateSecureToken(16)
+    : ((typeof incomingToken === 'string' && incomingToken.trim()) ? incomingToken.trim() : generateSecureToken(16))
   const now = new Date().toISOString()
 
   let participantIndex = -1
@@ -66,7 +87,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a modificare questo partecipante' })
       }
     }
-  } else if (incomingToken) {
+  } else if (!isOrganizerAction && incomingToken && !isAdditionalCar && !ownerParticipantId) {
     participantIndex = db.participants.findIndex(p => p.token === incomingToken && p.eventId === foundEvent.id)
   }
 
@@ -79,6 +100,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const resolvedHasDriver = role === 'rider' ? (hasDriver !== false) : true
   let updatedOrCreated: Participant
 
   if (participantIndex >= 0 && db.participants[participantIndex]) {
@@ -108,14 +130,16 @@ export default defineEventHandler(async (event) => {
       phone: typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 40) : undefined,
       pin: resolvedPin,
       notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
-      pickupLocation: typeof pickupLocation === 'string' && pickupLocation.trim() ? pickupLocation.trim().slice(0, 150) : undefined,
+      pickupLocation: role === 'passenger' ? cleanPickupLocation : undefined,
       pickupCoords: pickupCoords || null,
       carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
       price: role === 'rider' ? parsedPrice : null,
-      departureTime: role === 'rider' ? (typeof departureTime === 'string' ? departureTime.trim().slice(0, 40) : '') : undefined,
-      departureLocation: role === 'rider' ? (typeof departureLocation === 'string' ? departureLocation.trim().slice(0, 150) : '') : undefined,
+      departureTime: role === 'rider' ? (typeof departureTime === 'string' && departureTime.trim() ? departureTime.trim().slice(0, 40) : undefined) : undefined,
+      departureLocation: role === 'rider' ? cleanDepartureLocation : undefined,
       departureCoords: role === 'rider' ? departureCoords || null : null,
+      hasDriver: resolvedHasDriver,
+      ownerParticipantId: ownerParticipantId || existing.ownerParticipantId || null,
       assignedRiderId: role === 'passenger' ? (existing.assignedRiderId || null) : null,
       token: existing.token || token
     }
@@ -131,14 +155,16 @@ export default defineEventHandler(async (event) => {
       phone: typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 40) : undefined,
       pin: typeof pin === 'string' && pin.trim() ? pin.trim().slice(0, 20) : undefined,
       notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
-      pickupLocation: typeof pickupLocation === 'string' && pickupLocation.trim() ? pickupLocation.trim().slice(0, 150) : undefined,
+      pickupLocation: role === 'passenger' ? cleanPickupLocation : undefined,
       pickupCoords: pickupCoords || null,
       carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
       price: role === 'rider' ? parsedPrice : null,
-      departureTime: role === 'rider' ? (typeof departureTime === 'string' ? departureTime.trim().slice(0, 40) : '') : undefined,
-      departureLocation: role === 'rider' ? (typeof departureLocation === 'string' ? departureLocation.trim().slice(0, 150) : '') : undefined,
+      departureTime: role === 'rider' ? (typeof departureTime === 'string' && departureTime.trim() ? departureTime.trim().slice(0, 40) : undefined) : undefined,
+      departureLocation: role === 'rider' ? cleanDepartureLocation : undefined,
       departureCoords: role === 'rider' ? departureCoords || null : null,
+      hasDriver: resolvedHasDriver,
+      ownerParticipantId: ownerParticipantId || null,
       assignedRiderId: null,
       createdAt: now,
       token

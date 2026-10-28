@@ -114,16 +114,19 @@ async function handleReconnect() {
     return
   }
 
-  // Credentials mode (Phone or PIN)
+  // Credentials mode (PIN only)
   if (!selectedParticipantId.value) {
     errorMessage.value = 'Seleziona il tuo nome dalla lista'
     return
   }
 
+  if (!selectedParticipant.value?.hasPin) {
+    errorMessage.value = 'Nessun PIN impostato per questo profilo. Usa il tuo Link Personale o chiedi all\'organizzatore.'
+    return
+  }
+
   if (!credential.value.trim()) {
-    errorMessage.value = selectedParticipant.value?.hasPin
-      ? 'Inserisci il tuo PIN o il numero di telefono'
-      : 'Inserisci il tuo numero di telefono'
+    errorMessage.value = 'Inserisci il tuo codice PIN'
     return
   }
 
@@ -244,12 +247,11 @@ async function handleReconnect() {
                       PIN
                     </span>
                     <span
-                      v-else-if="p.phone"
-                      class="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                      title="Telefono"
+                      v-else
+                      class="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                      title="Nessun PIN impostato"
                     >
-                      <UIcon name="i-lucide-phone" class="h-2.5 w-2.5" />
-                      Tel
+                      Senza PIN
                     </span>
 
                     <UIcon
@@ -268,42 +270,68 @@ async function handleReconnect() {
 
             <!-- Credential Input Tailored to Selected Participant -->
             <div v-if="selectedParticipant" class="pt-2 rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
-              <div class="flex items-center justify-between">
-                <label class="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {{ selectedParticipant.hasPin ? t('reconnectModal.pinRequiredTitle') : t('reconnectModal.phoneRequiredTitle') }}
-                </label>
-                <span class="text-[10px] font-medium text-slate-400">
-                  per {{ selectedParticipant.name }}
-                </span>
-              </div>
+              <template v-if="selectedParticipant.hasPin">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                    {{ t('reconnectModal.pinRequiredTitle') }}
+                  </label>
+                  <span class="text-[10px] font-medium text-slate-400">
+                    per {{ selectedParticipant.name }}
+                  </span>
+                </div>
 
-              <UInput
-                v-model="credential"
-                :type="showCredential ? 'text' : 'password'"
-                :placeholder="selectedParticipant.hasPin ? 'es. 1234 (o numero di telefono)' : 'es. 3401234567'"
-                :ui="{ trailing: 'pe-1' }"
-                required
-                class="w-full font-mono text-center text-sm font-bold tracking-widest"
-                autofocus
-              >
-                <template #trailing>
+                <UInput
+                  v-model="credential"
+                  :type="showCredential ? 'text' : 'password'"
+                  placeholder="es. 1234"
+                  :ui="{ trailing: 'pe-1' }"
+                  required
+                  class="w-full font-mono text-center text-sm font-bold tracking-widest"
+                  autofocus
+                >
+                  <template #trailing>
+                    <UButton
+                      type="button"
+                      color="neutral"
+                      variant="link"
+                      size="sm"
+                      :icon="showCredential ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                      :aria-label="showCredential ? t('common.hidePassword') : t('common.showPassword')"
+                      tabindex="-1"
+                      @pointerdown.prevent
+                      @click="showCredential = !showCredential"
+                    />
+                  </template>
+                </UInput>
+
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                  {{ t('reconnectModal.pinRequiredHelp') }}
+                </p>
+              </template>
+
+              <!-- If participant has NO PIN -->
+              <template v-else>
+                <div class="rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-900/50 space-y-1.5">
+                  <div class="flex items-center gap-1.5 font-bold">
+                    <UIcon name="i-lucide-shield-alert" class="h-4 w-4 text-amber-600" />
+                    <span>Nessun PIN impostato</span>
+                  </div>
+                  <p class="text-[11px] leading-relaxed">
+                    Per ragioni di sicurezza, l'accesso con il solo numero di telefono non è consentito. Per riconnettere questo profilo, utilizza la scheda <strong>"Link o Token"</strong> oppure contatta l'organizzatore dell'evento.
+                  </p>
                   <UButton
                     type="button"
                     color="neutral"
-                    variant="link"
-                    size="sm"
-                    :icon="showCredential ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                    :aria-label="showCredential ? t('common.hidePassword') : t('common.showPassword')"
-                    tabindex="-1"
-                    @pointerdown.prevent
-                    @click="showCredential = !showCredential"
-                  />
-                </template>
-              </UInput>
-
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                {{ selectedParticipant.hasPin ? t('reconnectModal.pinRequiredHelp') : t('reconnectModal.phoneRequiredHelp') }}
-              </p>
+                    variant="subtle"
+                    size="xs"
+                    class="mt-1 font-semibold"
+                    @click="mode = 'link'"
+                  >
+                    <UIcon name="i-lucide-link-2" class="h-3.5 w-3.5 mr-1" />
+                    Passa a Link o Token
+                  </UButton>
+                </div>
+              </template>
             </div>
           </template>
 

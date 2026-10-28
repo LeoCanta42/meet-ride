@@ -18,6 +18,13 @@ const {
   loadEvent,
   unlockEvent,
   registerParticipant,
+  createParticipantAsOrganizer,
+  updateParticipantAsOrganizer,
+  deleteParticipantAsOrganizer,
+  assignPassengerAsOrganizer,
+  updateEventDetails,
+  calculateConvoyRoute,
+  deleteCar,
   leaveEvent,
   selectCar
 } = useEvent()
@@ -34,6 +41,38 @@ const showJoinChoiceModal = ref(false)
 const targetRiderId = ref('')
 const modalInitialData = ref<Participant | null>(null)
 const actionLoading = ref(false)
+const carActionLoadingId = ref<string | null>(null)
+
+// Organizer Control state (Feature 2)
+const isOrganizerAction = ref(false)
+const showAssignModal = ref(false)
+const passengerToAssign = ref<Participant | null>(null)
+const showEditEventModal = ref(false)
+
+// Passenger info detail modal state
+const showPassengerModal = ref(false)
+const selectedPassenger = ref<Participant | null>(null)
+const selectedPassengerCar = ref<CarWithSeats | null>(null)
+
+function handleShowPassengerDetail(passenger: Participant, car?: CarWithSeats | null) {
+  selectedPassenger.value = passenger
+  if (car) {
+    selectedPassengerCar.value = car
+  } else {
+    selectedPassengerCar.value = cars.value.find(c => c.passengers.some(p => p.id === passenger.id)) || null
+  }
+  showPassengerModal.value = true
+}
+
+function handleShowPassengerDetailById(passengerId: string) {
+  const p = allParticipants.value.find(part => part.id === passengerId)
+  if (p) {
+    handleShowPassengerDetail(p)
+  }
+}
+
+// Convoy & AI calculation state (Feature 4)
+const convoyCalculating = ref(false)
 
 const allParticipants = computed<Participant[]>(() => {
   const list: Participant[] = []
@@ -117,6 +156,59 @@ async function handleUnlock(password: string) {
 }
 
 function openJoinModal(role: 'rider' | 'passenger') {
+  isOrganizerAction.value = false
+  modalInitialData.value = {
+    role,
+    name: myParticipant.value?.name || '',
+    phone: myParticipant.value?.phone || '',
+    hasDriver: role === 'rider' ? (myParticipant.value?.role === 'rider' ? false : true) : true,
+    id: '',
+    eventId: currentEvent.value?.id || '',
+    createdAt: ''
+  } as Participant
+  isModalOpen.value = true
+}
+
+function handleEditCar(rider: Participant) {
+  if (isOrganizer.value) {
+    handleOrganizerEditParticipant(rider)
+  } else {
+    isOrganizerAction.value = false
+    modalInitialData.value = { ...rider }
+    isModalOpen.value = true
+  }
+}
+
+async function handleDeleteCar(riderId: string) {
+  if (isOrganizer.value) {
+    await handleOrganizerDeleteCar(riderId)
+    return
+  }
+  if (confirm('Vuoi davvero rimuovere questa vettura? I passeggeri a bordo torneranno in lista di attesa.')) {
+    actionLoading.value = true
+    try {
+      const res = await deleteCar(riderId)
+      if (res.success) {
+        toast.add({ title: 'Vettura rimossa con successo', color: 'success' })
+      } else {
+        toast.add({ title: 'Errore', description: res.error, color: 'error' })
+      }
+    } finally {
+      actionLoading.value = false
+    }
+  }
+}
+
+function openEditModal() {
+  if (!myParticipant.value) return
+  isOrganizerAction.value = false
+  modalInitialData.value = { ...myParticipant.value }
+  isModalOpen.value = true
+}
+
+// Organizer actions (Feature 2)
+function openOrganizerAddModal(role: 'rider' | 'passenger') {
+  isOrganizerAction.value = true
   modalInitialData.value = {
     role,
     name: '',
@@ -127,18 +219,128 @@ function openJoinModal(role: 'rider' | 'passenger') {
   isModalOpen.value = true
 }
 
-function openEditModal() {
-  if (!myParticipant.value) return
-  modalInitialData.value = { ...myParticipant.value }
+function handleOrganizerEditParticipant(participant: Participant) {
+  isOrganizerAction.value = true
+  modalInitialData.value = { ...participant }
   isModalOpen.value = true
+}
+
+async function handleOrganizerDeleteCar(riderId: string) {
+  if (confirm('Vuoi davvero eliminare questa vettura? I passeggeri a bordo torneranno in lista di attesa.')) {
+    actionLoading.value = true
+    try {
+      const res = await deleteParticipantAsOrganizer(riderId)
+      if (res.success) {
+        toast.add({ title: 'Vettura rimossa con successo', color: 'success' })
+      } else {
+        toast.add({ title: 'Errore', description: res.error, color: 'error' })
+      }
+    } finally {
+      actionLoading.value = false
+    }
+  }
+}
+
+async function handleOrganizerDeletePassenger(passengerId: string) {
+  if (confirm('Vuoi rimuovere questo partecipante dall\'evento?')) {
+    actionLoading.value = true
+    try {
+      const res = await deleteParticipantAsOrganizer(passengerId)
+      if (res.success) {
+        toast.add({ title: 'Partecipante rimosso', color: 'success' })
+      } else {
+        toast.add({ title: 'Errore', description: res.error, color: 'error' })
+      }
+    } finally {
+      actionLoading.value = false
+    }
+  }
+}
+
+async function handleOrganizerRemovePassengerFromCar(passengerId: string) {
+  actionLoading.value = true
+  try {
+    const res = await assignPassengerAsOrganizer(passengerId, null)
+    if (res.success) {
+      toast.add({ title: 'Passeggero rimosso dall\'auto', color: 'neutral' })
+    } else {
+      toast.add({ title: 'Errore', description: res.error, color: 'error' })
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+function openAssignModal(passenger: Participant) {
+  passengerToAssign.value = passenger
+  showAssignModal.value = true
+}
+
+async function handleConfirmAssign(riderId: string) {
+  if (!passengerToAssign.value) return
+  actionLoading.value = true
+  try {
+    const res = await assignPassengerAsOrganizer(passengerToAssign.value.id, riderId)
+    if (res.success) {
+      toast.add({ title: 'Passeggero assegnato con successo!', color: 'success' })
+      showAssignModal.value = false
+      passengerToAssign.value = null
+    } else {
+      toast.add({ title: 'Errore assegnazione', description: res.error, color: 'error' })
+    }
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 async function handleParticipantSubmit(data: Partial<Participant>) {
   const isEdit = !!modalInitialData.value?.id
-  const res = await registerParticipant(data)
+
+  // If performed by Organizer directly for managing participants
+  if (isOrganizerAction.value) {
+    actionLoading.value = true
+    try {
+      let res
+      if (isEdit && modalInitialData.value?.id) {
+        res = await updateParticipantAsOrganizer(modalInitialData.value.id, data)
+      } else {
+        res = await createParticipantAsOrganizer(data)
+      }
+
+      if (res.success) {
+        toast.add({
+          title: t('common.success'),
+          description: isEdit ? 'Partecipante aggiornato dall\'organizzatore' : 'Partecipante aggiunto all\'evento',
+          color: 'success'
+        })
+      } else {
+        toast.add({
+          title: t('common.error'),
+          description: res.error,
+          color: 'error'
+        })
+      }
+    } finally {
+      actionLoading.value = false
+      isOrganizerAction.value = false
+    }
+    return
+  }
+
+  // Normal user flow
+  const isAdditionalCar = Boolean(myParticipant.value && !modalInitialData.value?.id && data.role === 'rider')
+  const payloadToSubmit = {
+    ...data,
+    id: modalInitialData.value?.id || undefined,
+    ownerParticipantId: isAdditionalCar ? myParticipant.value?.id : undefined,
+    isAdditionalCar
+  }
+
+  const res = await registerParticipant(payloadToSubmit)
   if (res.success) {
     toast.add({
       title: t('common.success'),
+      description: isAdditionalCar ? 'Nuova auto aggiunta con successo!' : undefined,
       color: 'success'
     })
 
@@ -148,13 +350,56 @@ async function handleParticipantSubmit(data: Partial<Participant>) {
     }
 
     // Show onboarding sync modal if first time registration
-    if (!isEdit) {
+    if (!isEdit && !isAdditionalCar) {
       isNewJoin.value = true
       showDeviceSyncModal.value = true
     }
   } else {
     toast.add({
       title: t('common.error'),
+      description: res.error,
+      color: 'error'
+    })
+  }
+}
+
+// Convoy & AI calculation handlers (Feature 4)
+async function handleCalculateConvoy() {
+  convoyCalculating.value = true
+  try {
+    const res = await calculateConvoyRoute()
+    if (res.success) {
+      toast.add({
+        title: 'Itinerario e posti ottimizzati con successo!',
+        description: 'Passeggeri assegnati alle auto e tappe/ritrovi calcolati con Gemini AI.',
+        color: 'success'
+      })
+      if (currentEvent.value?.id) {
+        await loadEvent(currentEvent.value.id)
+      }
+    } else {
+      toast.add({
+        title: 'Errore',
+        description: res.error,
+        color: 'error'
+      })
+    }
+  } finally {
+    convoyCalculating.value = false
+  }
+}
+
+async function handleUpdateArrivalTime(time: string) {
+  const res = await updateEventDetails({ arrivalTime: time })
+  if (res.success) {
+    toast.add({
+      title: 'Orario di arrivo aggiornato!',
+      description: `Nuovo orario fissato alle ${time}`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: 'Errore',
       description: res.error,
       color: 'error'
     })
@@ -177,7 +422,7 @@ async function handleLeaveEvent() {
 }
 
 async function handleSelectCar(riderId: string) {
-  actionLoading.value = true
+  carActionLoadingId.value = riderId
   try {
     const res = await selectCar(riderId)
     if (res.success) {
@@ -193,12 +438,13 @@ async function handleSelectCar(riderId: string) {
       })
     }
   } finally {
-    actionLoading.value = false
+    carActionLoadingId.value = null
   }
 }
 
 async function handleLeaveCar() {
-  actionLoading.value = true
+  const currentRiderId = myParticipant.value?.assignedRiderId
+  carActionLoadingId.value = currentRiderId || null
   try {
     const res = await selectCar(null)
     if (res.success) {
@@ -214,7 +460,7 @@ async function handleLeaveCar() {
       })
     }
   } finally {
-    actionLoading.value = false
+    carActionLoadingId.value = null
   }
 }
 
@@ -299,6 +545,14 @@ const totalOccupiedSeats = computed(() => {
                 Organizzatore
               </span>
               <span
+                v-if="currentEvent.arrivalTime"
+                class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300 inline-flex items-center gap-1"
+                title="Orario di arrivo a destinazione"
+              >
+                <UIcon name="i-lucide-clock" class="h-3 w-3" />
+                Arrivo: {{ currentEvent.arrivalTime }}
+              </span>
+              <span
                 v-if="currentEvent.sharedPassword && currentEvent.sharedPassword !== '***'"
                 class="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                 title="Password condivisa evento"
@@ -322,13 +576,25 @@ const totalOccupiedSeats = computed(() => {
           </div>
 
           <!-- Share & Actions -->
-          <div class="flex items-center gap-2 shrink-0 w-full md:w-auto">
+          <div class="flex items-center gap-2 shrink-0 w-full md:w-auto flex-wrap">
+            <UButton
+              v-if="!myParticipant && allParticipants.length > 0"
+              color="neutral"
+              variant="outline"
+              size="md"
+              @click="preselectedParticipantId = ''; showReconnectModal = true"
+              class="font-semibold text-xs flex-1 md:flex-initial justify-center"
+            >
+              <UIcon name="i-lucide-log-in" class="h-4 w-4 mr-1 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>{{ t('eventView.reconnectPromptBtn') }}</span>
+            </UButton>
+
             <UButton
               color="neutral"
               variant="subtle"
               size="md"
               @click="copyShareLink"
-              class="font-semibold text-xs w-full md:w-auto justify-center"
+              class="font-semibold text-xs flex-1 md:flex-initial justify-center"
             >
               <UIcon name="i-lucide-share-2" class="h-4 w-4 mr-1.5 shrink-0" />
               {{ t('events.shareTitle') }}
@@ -360,10 +626,9 @@ const totalOccupiedSeats = computed(() => {
         </div>
       </div>
 
-      <!-- Current Participant Status & Actions -->
-      <div class="surface-card rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800">
-        <!-- Already registered user -->
-        <div v-if="myParticipant" class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <!-- Current Participant Status & Actions (visible only when registered) -->
+      <div v-if="myParticipant" class="surface-card rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div class="flex items-start sm:items-center gap-3 min-w-0 w-full lg:w-auto">
             <div
               class="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl text-white font-bold"
@@ -441,85 +706,72 @@ const totalOccupiedSeats = computed(() => {
             </UButton>
           </div>
         </div>
+      </div>
 
-        <!-- Not registered yet: Clear & Intuitive Join / Reconnect Box -->
-        <div v-else class="space-y-4">
-          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div class="space-y-1">
-              <div class="inline-flex items-center gap-1.5 rounded-full bg-sky-100/80 px-2.5 py-0.5 text-[10px] font-bold text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
-                <UIcon name="i-lucide-sparkles" class="h-3 w-3 text-sky-600 dark:text-sky-400" />
-                <span>Nessun account necessario</span>
-              </div>
-              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">
-                Vuoi partecipare a questo evento?
-              </h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-                Basta indicare il tuo nome per salire a bordo o offrire posti in auto. Il tuo browser ricorderà il tuo posto automaticamente.
-              </p>
-            </div>
-
-            <div class="flex items-center gap-2 w-full md:w-auto shrink-0">
-              <UButton
-                color="primary"
-                variant="solid"
-                size="md"
-                @click="openJoinModal('passenger')"
-                class="font-semibold text-xs shadow-sm flex-1 md:flex-initial"
-              >
-                {{ t('eventView.iNeedRide') }}
-              </UButton>
-
-              <UButton
-                color="neutral"
-                variant="outline"
-                size="md"
-                @click="openJoinModal('rider')"
-                class="font-semibold text-xs flex-1 md:flex-initial"
-              >
-                {{ t('eventView.imDriving') }}
-              </UButton>
-            </div>
+      <!-- Organizer Full Control Toolbar (Feature 2) -->
+      <div
+        v-if="isOrganizer"
+        class="surface-card rounded-2xl p-4 border-2 border-purple-200/80 bg-gradient-to-r from-purple-50/70 to-indigo-50/50 dark:border-purple-900/60 dark:from-purple-950/30 dark:to-indigo-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+      >
+        <div class="flex items-center gap-3">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white font-bold shadow-xs">
+            <UIcon name="i-lucide-shield-check" class="h-5 w-5" />
           </div>
+          <div>
+            <span class="block text-xs font-bold text-slate-900 dark:text-white">
+              Pannello Gestione Organizzatore
+            </span>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400 block leading-tight">
+              Hai pieno controllo: aggiungi o modifica guidatori e passeggeri, gestisci i posti e le auto.
+            </span>
+          </div>
+        </div>
 
-          <!-- Highlighted Reconnect Callout if there are participants -->
-          <div
-            v-if="allParticipants.length > 0"
-            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/70 p-3 dark:bg-slate-800/40"
+        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="xs"
+            @click="showEditEventModal = true"
+            class="font-bold text-xs border-purple-300 dark:border-purple-800"
           >
-            <div class="flex items-center gap-2.5">
-              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400">
-                <UIcon name="i-lucide-smartphone" class="h-4 w-4" />
-              </div>
-              <div>
-                <span class="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {{ t('eventView.reconnectPromptBadge') }}
-                </span>
-                <span class="text-[11px] text-slate-500 dark:text-slate-400 block leading-tight">
-                  {{ t('eventView.reconnectPromptText') }}
-                </span>
-              </div>
-            </div>
+            <UIcon name="i-lucide-pencil" class="h-3.5 w-3.5 mr-1 text-purple-600 dark:text-purple-400" />
+            Modifica Evento
+          </UButton>
 
-            <UButton
-              color="neutral"
-              variant="outline"
-              size="xs"
-              @click="preselectedParticipantId = ''; showReconnectModal = true"
-              class="font-bold text-xs shrink-0 w-full sm:w-auto text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800 hover:bg-sky-50 dark:hover:bg-sky-950"
-            >
-              <UIcon name="i-lucide-log-in" class="h-3.5 w-3.5 mr-1" />
-              <span>{{ t('eventView.reconnectPromptBtn') }}</span>
-            </UButton>
-          </div>
+          <UButton
+            color="primary"
+            size="xs"
+            @click="openOrganizerAddModal('rider')"
+            class="font-bold text-xs shadow-xs"
+          >
+            <UIcon name="i-lucide-car" class="h-3.5 w-3.5 mr-1" />
+            Aggiungi Guidatore
+          </UButton>
+
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="xs"
+            @click="openOrganizerAddModal('passenger')"
+            class="font-bold text-xs border-purple-300 dark:border-purple-800"
+          >
+            <UIcon name="i-lucide-user-plus" class="h-3.5 w-3.5 mr-1" />
+            Aggiungi Passeggero
+          </UButton>
         </div>
       </div>
 
-      <!-- Smart Seat Allocation Optimizer (Organizer only) -->
-      <OptimizationPanel
-        v-if="isOrganizer"
-        :event-id="currentEvent.id"
+      <!-- Convoy Route & Track Map (Centralized Gemini AI Itinerary & Seat Allocation) -->
+      <ConvoyMap
+        :event="currentEvent"
         :is-organizer="isOrganizer"
-        @optimized="loadEvent(currentEvent.id)"
+        :route-plan="currentEvent.routePlan"
+        :cars="cars"
+        :loading="convoyCalculating"
+        @calculate="handleCalculateConvoy"
+        @update-arrival-time="handleUpdateArrivalTime"
+        @show-passenger="handleShowPassengerDetailById"
       />
 
       <!-- Cars Grid Section -->
@@ -535,17 +787,18 @@ const totalOccupiedSeats = computed(() => {
             </span>
           </div>
 
-          <UButton
-            v-if="!myParticipant || myParticipant.role !== 'rider'"
-            color="primary"
-            variant="ghost"
-            size="xs"
-            @click="openJoinModal('rider')"
-            class="font-semibold"
-          >
-            <UIcon name="i-lucide-plus" class="h-3.5 w-3.5 mr-1 shrink-0" />
-            {{ t('eventView.imDriving') }}
-          </UButton>
+          <div class="flex items-center gap-2">
+            <UButton
+              color="primary"
+              variant="ghost"
+              size="xs"
+              @click="openJoinModal('rider')"
+              class="font-semibold"
+            >
+              <UIcon name="i-lucide-plus" class="h-3.5 w-3.5 mr-1 shrink-0" />
+              {{ t('eventView.imDriving') }}
+            </UButton>
+          </div>
         </div>
 
         <!-- Empty Cars -->
@@ -559,14 +812,6 @@ const totalOccupiedSeats = computed(() => {
           <p class="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
             {{ t('eventView.noCarsYet') }}
           </p>
-          <UButton
-            color="primary"
-            size="sm"
-            @click="openJoinModal('rider')"
-            class="mt-4 font-semibold text-xs"
-          >
-            {{ t('eventView.imDriving') }}
-          </UButton>
         </div>
 
         <!-- Cars Grid -->
@@ -576,11 +821,16 @@ const totalOccupiedSeats = computed(() => {
             :key="car.rider.id"
             :car="car"
             :my-participant="myParticipant"
-            :loading="actionLoading"
+            :is-organizer="isOrganizer"
+            :loading="carActionLoadingId === car.rider.id"
             @select-car="handleSelectCar"
             @leave-car="handleLeaveCar"
             @prompt-join="handlePromptJoin"
             @claim-participant="handleClaimParticipant"
+            @edit-car="handleEditCar"
+            @delete-car="handleDeleteCar"
+            @remove-passenger="handleOrganizerRemovePassengerFromCar"
+            @show-passenger="handleShowPassengerDetail"
           />
         </div>
       </div>
@@ -632,7 +882,15 @@ const totalOccupiedSeats = computed(() => {
             ]"
           >
             <div class="flex items-center justify-between">
-              <span class="font-bold text-slate-900 dark:text-white text-xs">{{ passenger.name }}</span>
+              <button
+                type="button"
+                @click="handleShowPassengerDetail(passenger, null)"
+                class="font-bold text-slate-900 dark:text-white text-xs hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer text-left flex items-center gap-1.5 transition-colors"
+                :title="'Visualizza dettagli di ' + passenger.name"
+              >
+                <UIcon name="i-lucide-user" class="h-3.5 w-3.5 text-slate-400" />
+                <span>{{ passenger.name }}</span>
+              </button>
               <div class="flex items-center gap-1.5">
                 <button
                   v-if="!myParticipant"
@@ -657,6 +915,35 @@ const totalOccupiedSeats = computed(() => {
 
             <div v-if="passenger.notes" class="text-[11px] text-slate-500 dark:text-slate-400 italic truncate">
               "{{ passenger.notes }}"
+            </div>
+
+            <!-- Organizer controls on unassigned passenger (Feature 2) -->
+            <div v-if="isOrganizer" class="pt-2 flex items-center justify-end gap-1.5 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                class="px-2 py-1 text-[11px] font-semibold text-sky-600 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1"
+                title="Assegna a un'auto"
+                @click="openAssignModal(passenger)"
+              >
+                <UIcon name="i-lucide-car" class="h-3 w-3" />
+                <span>Assegna</span>
+              </button>
+              <button
+                type="button"
+                class="p-1 text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                title="Modifica passeggero"
+                @click="handleOrganizerEditParticipant(passenger)"
+              >
+                <UIcon name="i-lucide-pencil" class="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                class="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                title="Elimina passeggero"
+                @click="handleOrganizerDeletePassenger(passenger.id)"
+              >
+                <UIcon name="i-lucide-trash-2" class="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
         </div>
@@ -712,6 +999,49 @@ const totalOccupiedSeats = computed(() => {
       </template>
     </UModal>
 
+    <!-- Assign Passenger Modal (Feature 2 - Organizer only) -->
+    <UModal
+      :open="showAssignModal"
+      @update:open="showAssignModal = $event"
+      title="Assegna Passeggero a un'Auto"
+      :description="`Seleziona l'auto per ${passengerToAssign?.name || 'il passeggero'}`"
+      :ui="{ content: 'sm:max-w-md' }"
+    >
+      <template #body>
+        <div class="space-y-2">
+          <div v-if="cars.length === 0" class="text-xs text-slate-400 text-center py-4">
+            Nessuna vettura presente per questo evento.
+          </div>
+          <button
+            v-for="car in cars"
+            :key="car.rider.id"
+            type="button"
+            class="w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all"
+            :class="car.isFull
+              ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              : 'hover:border-sky-500 hover:bg-sky-50/50 cursor-pointer border-slate-200 dark:border-slate-800'"
+            :disabled="car.isFull"
+            @click="handleConfirmAssign(car.rider.id)"
+          >
+            <div class="min-w-0 pr-2">
+              <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
+                {{ car.rider.name }}
+              </div>
+              <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                {{ car.rider.carModel || 'Auto' }} • Partenza: {{ car.rider.departureLocation || 'Non specificato' }}
+              </div>
+            </div>
+            <span
+              class="shrink-0 text-xs font-bold rounded-full px-2 py-0.5"
+              :class="car.isFull ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'"
+            >
+              {{ car.isFull ? 'Al completo' : `${car.availableSeats} liberi` }}
+            </span>
+          </button>
+        </div>
+      </template>
+    </UModal>
+
     <!-- Participant Modal -->
     <ParticipantModal
       v-model:open="isModalOpen"
@@ -733,6 +1063,26 @@ const totalOccupiedSeats = computed(() => {
       :participants="allParticipants"
       :preselected-participant-id="preselectedParticipantId"
       @reconnected="loadEvent(eventIdOrSlug)"
+    />
+
+    <!-- Edit Event Modal (Organizer only) -->
+    <EditEventModal
+      v-model:open="showEditEventModal"
+      :event="currentEvent"
+      @saved="loadEvent(eventIdOrSlug)"
+    />
+
+    <!-- Passenger Info Detail Modal -->
+    <PassengerInfoModal
+      v-model:open="showPassengerModal"
+      :passenger="selectedPassenger"
+      :car="selectedPassengerCar"
+      :is-organizer="isOrganizer"
+      :my-participant="myParticipant"
+      @claim="handleClaimParticipant"
+      @remove-from-car="handleOrganizerRemovePassengerFromCar"
+      @reassign="openAssignModal"
+      @delete="handleOrganizerDeletePassenger"
     />
   </div>
 </template>

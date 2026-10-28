@@ -46,14 +46,28 @@ Organizing rides for group events usually ends up in a messy WhatsApp group with
 - **One-Click Apply**: Automatically updates car seat assignments across the event.
 - **Access Control**: Strictly restricted to the event creator.
 
-### 📱 Frictionless Guest Model with Cross-Device Sync
-- **No Sign-Up Required**: Guests only need the event link and shared password.
-- **Cross-Device Recovery & Onboarding**:
+### 📱 Frictionless Guest Model with Secure PIN Sync
+- **No Account Required for Guests**: Guests only need the event link and shared password.
+- **Secure Cross-Device Recovery**:
+  - **4-Digit Secret PIN**: Accessing from a different browser or phone requires the secret PIN chosen during registration (or the personal link). Phone numbers are strictly preserved for passenger contact and coordination, never used as an authentication loophole.
   - **Instant Camera QR Code**: Scan right from your desktop screen with your phone camera to open the event already logged in.
-  - **Guided Onboarding Dialog**: Right after joining, guests receive immediate visual confirmation, their magic link, and an overview of their 4-digit PIN.
-  - **Phone / PIN Reconnect Modal**: Accessing from a new browser? Select your name and enter your 4-digit PIN or phone number to restore your seat.
+  - **Guided Onboarding Dialog**: Right after joining, guests receive immediate visual confirmation, their personal link, and an overview of their 4-digit PIN.
   - **1-Click Self-Identification**: Tap your name on any car card or waiting list to instantly open the reconnection prompt with your profile pre-selected.
   - **Personal Management Link**: Share your private access URL (`/events/slug?p=token`) or send it to yourself on WhatsApp with 1 click.
+
+### 👑 Full Organizer Event Management
+- **Direct Participant Creation**: Organizers can directly add drivers and passengers to the event without overriding their organizer session.
+- **Edit & Delete Any Participant**: Full administrative control over any car, seats, departure times, and passenger details.
+- **Seat Assignment & Unassignment**: Organizers can manually assign unassigned passengers to specific cars or free up seats with 1 click.
+
+### 🚘 Multi-Vehicle Registration & Driverless Car Hosting
+- **Up to 2 Vehicles**: Users can register a primary car and an optional secondary vehicle.
+- **Host Car Without Driver**: Community members who own an extra vehicle can make it available for the group even if they are not driving it themselves (`hasDriver: false`), with distinct "Cerca autista" badges and seat counters.
+
+### 🗺️ AI Convoy Track Map & Target Arrival Time (Gemini Powered)
+- **Target Arrival Time**: Specify a required destination arrival time (e.g. `20:30`).
+- **Interactive Leaflet Route Map**: Visualizes starting locations, calculated meeting/rendezvous points, and destination with OpenStreetMap tiles and polylines.
+- **Gemini AI Convoy Engine**: Analyzes driver departure points (e.g. Biancavilla and Belpasso) and automatically determines the optimal convergence meeting point (e.g. Paternò), departure schedules working backward from the arrival time, and step-by-step travel timeline.
 
 ### 🔒 Privacy & Password Visibility Controls
 - **Eye Toggle Button**: Show/hide passwords across the app (event unlock gate, organizer login, registration, and participant PINs).

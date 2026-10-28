@@ -44,8 +44,10 @@ export interface Database {
           destination_lat: number | null
           destination_lng: number | null
           event_date: string
+          arrival_time: string | null
           shared_password: string
           status: string
+          route_plan: Json | null
           created_at: string
           updated_at: string
         }
@@ -59,8 +61,10 @@ export interface Database {
           destination_lat?: number | null
           destination_lng?: number | null
           event_date: string
+          arrival_time?: string | null
           shared_password: string
           status?: string
+          route_plan?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -74,8 +78,10 @@ export interface Database {
           destination_lat?: number | null
           destination_lng?: number | null
           event_date?: string
+          arrival_time?: string | null
           shared_password?: string
           status?: string
+          route_plan?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -108,6 +114,8 @@ export interface Database {
           departure_location: string | null
           departure_lat: number | null
           departure_lng: number | null
+          has_driver: boolean | null
+          owner_participant_id: string | null
           assigned_rider_id: string | null
           token: string
           created_at: string
@@ -130,6 +138,8 @@ export interface Database {
           departure_location?: string | null
           departure_lat?: number | null
           departure_lng?: number | null
+          has_driver?: boolean | null
+          owner_participant_id?: string | null
           assigned_rider_id?: string | null
           token: string
           created_at?: string
@@ -152,6 +162,8 @@ export interface Database {
           departure_location?: string | null
           departure_lat?: number | null
           departure_lng?: number | null
+          has_driver?: boolean | null
+          owner_participant_id?: string | null
           assigned_rider_id?: string | null
           token?: string
           created_at?: string
