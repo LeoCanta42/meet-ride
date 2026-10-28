@@ -48,19 +48,25 @@ export default defineEventHandler(async (event) => {
     email: string
     name: string
     passwordHash: string
+    role: 'organizer' | 'admin'
+    isAdmin: boolean
+    isApproved: boolean
     createdAt: string
   } = {
     id: crypto.randomUUID(),
     email: cleanEmail,
     name: cleanName,
     passwordHash: hashPassword(rawPassword),
+    role: 'organizer',
+    isAdmin: false,
+    isApproved: false,
     createdAt: new Date().toISOString()
   }
 
   // If Supabase is configured, ensure direct insert/upsert succeeds immediately
   const supabase = getSupabaseServerClient()
   if (supabase) {
-    const { data: inserted, error: insertError } = await supabase
+    let { data: inserted, error: insertError } = await supabase
       .from('organizers')
       .upsert(
         {
@@ -68,6 +74,8 @@ export default defineEventHandler(async (event) => {
           email: newOrganizer.email,
           name: newOrganizer.name,
           password_hash: newOrganizer.passwordHash,
+          role: newOrganizer.role,
+          is_approved: newOrganizer.isApproved,
           created_at: newOrganizer.createdAt
         },
         { onConflict: 'email' }
@@ -75,12 +83,31 @@ export default defineEventHandler(async (event) => {
       .select('id, email, name, password_hash, created_at')
       .single()
 
+    // If role / is_approved column not yet created in Supabase, retry without them
     if (insertError) {
-      console.error('[Auth Register] Supabase insert error:', insertError.message)
-      throw createError({
-        statusCode: 500,
-        statusMessage: `Errore nel salvataggio dell'account sul database: ${insertError.message}`
-      })
+      const retryRes = await supabase
+        .from('organizers')
+        .upsert(
+          {
+            id: newOrganizer.id,
+            email: newOrganizer.email,
+            name: newOrganizer.name,
+            password_hash: newOrganizer.passwordHash,
+            created_at: newOrganizer.createdAt
+          },
+          { onConflict: 'email' }
+        )
+        .select('id, email, name, password_hash, created_at')
+        .single()
+
+      if (retryRes.error) {
+        console.error('[Auth Register] Supabase insert error:', retryRes.error.message)
+        throw createError({
+          statusCode: 500,
+          statusMessage: `Errore nel salvataggio dell'account sul database: ${retryRes.error.message}`
+        })
+      }
+      inserted = retryRes.data
     }
 
     if (inserted?.id) {

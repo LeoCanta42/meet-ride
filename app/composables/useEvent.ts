@@ -394,10 +394,11 @@ export function useEvent() {
     }
   }
 
-  async function loadMyEvents(): Promise<void> {
+  async function loadMyEvents(scope?: string): Promise<void> {
     myEventsLoading.value = true
     try {
-      const res = await $fetch<{ events: (EventItem & { stats?: any })[] }>('/api/events')
+      const url = scope ? `/api/events?scope=${encodeURIComponent(scope)}` : '/api/events'
+      const res = await $fetch<{ events: (EventItem & { stats?: any; creatorName?: string; creatorEmail?: string })[] }>(url)
       myEvents.value = res.events
     } catch (err) {
       console.error('Error loading organizer events:', err)

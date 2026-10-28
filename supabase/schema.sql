@@ -20,6 +20,8 @@ create table if not exists public.organizers (
   email text unique not null,
   name text not null,
   password_hash text,
+  role text not null default 'organizer',
+  is_approved boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -73,6 +75,8 @@ create table if not exists public.participants (
 
 -- Ensure columns exist when upgrading an older database installation
 alter table public.organizers add column if not exists password_hash text;
+alter table public.organizers add column if not exists role text not null default 'organizer';
+alter table public.organizers add column if not exists is_approved boolean not null default false;
 alter table public.events add column if not exists arrival_time text;
 alter table public.events add column if not exists route_plan jsonb;
 alter table public.participants add column if not exists pin text;

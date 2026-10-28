@@ -92,7 +92,34 @@ async function handleSubmit() {
       </div>
     </div>
 
-    <div class="surface-card rounded-3xl p-6 sm:p-8 shadow-xl">
+    <!-- Pending Approval Warning Card -->
+    <div
+      v-if="user && !user.isAdmin && !user.isApproved"
+      class="surface-card rounded-3xl p-6 sm:p-8 shadow-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 text-center space-y-4"
+    >
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/60 dark:text-amber-300 shadow-sm">
+        <UIcon name="i-lucide-clock" class="h-7 w-7" />
+      </div>
+      <div class="space-y-1.5 max-w-md mx-auto">
+        <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+          Account in attesa di approvazione
+        </h3>
+        <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+          Il tuo account è stato registrato ma deve essere approvato dall'amministratore prima di poter creare nuovi eventi. L'amministratore verificherà e abiliterà manualmente il tuo profilo.
+        </p>
+      </div>
+      <div class="pt-2">
+        <NuxtLink to="/">
+          <UButton color="neutral" variant="outline" size="sm" class="font-semibold text-xs">
+            <UIcon name="i-lucide-arrow-left" class="h-4 w-4 mr-1" />
+            Torna alla Dashboard
+          </UButton>
+        </NuxtLink>
+      </div>
+    </div>
+
+    <!-- Event Creation Form -->
+    <div v-else class="surface-card rounded-3xl p-6 sm:p-8 shadow-xl">
       <form @submit.prevent="handleSubmit" class="space-y-5">
         <!-- Title -->
         <div>

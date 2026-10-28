@@ -2,7 +2,11 @@ export interface OrganizerUser {
   id: string
   email: string
   name: string
+  role?: 'admin' | 'organizer'
+  isAdmin?: boolean
+  isApproved?: boolean
   createdAt: string
+  eventsCount?: number
 }
 
 export interface Coordinates {

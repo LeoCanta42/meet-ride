@@ -27,7 +27,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizer = await getAuthenticatedOrganizer(event)
-  const isOrganizer = organizer?.id === foundEvent.organizerId
+  const isOrganizer = Boolean(
+    organizer && (organizer.id === foundEvent.organizerId || organizer.role === 'admin' || organizer.isAdmin === true)
+  )
   const unlocked = isOrganizer || isEventUnlocked(event, foundEvent.id)
 
   // If locked, return minimal public info so the client can show the password gate

@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Evento non trovato' })
   }
 
-  if (eventItem.organizerId !== organizer.id) {
+  const isAdmin = organizer.role === 'admin' || organizer.isAdmin === true
+  if (eventItem.organizerId !== organizer.id && !isAdmin) {
     throw createError({ statusCode: 403, statusMessage: 'Non puoi eliminare questo evento' })
   }
 

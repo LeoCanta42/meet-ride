@@ -151,13 +151,21 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
 
       // If at least organizers or events query succeeded, build state from Supabase
       if (!orgsRes.error && !eventsRes.error && !partsRes.error) {
-        const organizers = (orgsRes.data || []).map((o: any) => ({
-          id: o.id,
-          email: (o.email || '').trim().toLowerCase(),
-          name: o.name,
-          passwordHash: o.password_hash || '',
-          createdAt: o.created_at
-        }))
+        const organizers = (orgsRes.data || []).map((o: any) => {
+          const role = (o.role || 'organizer').trim().toLowerCase() as 'admin' | 'organizer'
+          const isAdmin = role === 'admin' || Boolean(o.is_admin)
+          const isApproved = isAdmin || Boolean(o.is_approved) || false
+          return {
+            id: o.id,
+            email: (o.email || '').trim().toLowerCase(),
+            name: o.name,
+            passwordHash: o.password_hash || '',
+            role: isAdmin ? ('admin' as const) : ('organizer' as const),
+            isAdmin,
+            isApproved,
+            createdAt: o.created_at
+          }
+        })
 
         const events: EventItem[] = (eventsRes.data || []).map((e: any) => {
           const unpacked = unpackEventDescription(e.description || '')
@@ -308,6 +316,8 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
             email: o.email.trim().toLowerCase(),
             name: o.name,
             password_hash: o.passwordHash,
+            role: o.role || (o.isAdmin ? 'admin' : 'organizer'),
+            is_approved: o.isAdmin ? true : Boolean(o.isApproved),
             created_at: o.createdAt
           }))
 
@@ -316,9 +326,15 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
               try {
                 const { error: orgError } = await supabase.from('organizers').upsert(orgRows, { onConflict: 'email' })
                 if (orgError) {
-                  for (const row of orgRows) {
-                    await supabase.from('organizers').upsert(row, { onConflict: 'id' })
-                  }
+                  // Fallback without role/is_approved columns if table not yet migrated
+                  const baseOrgRows = data.organizers.map(o => ({
+                    id: o.id,
+                    email: o.email.trim().toLowerCase(),
+                    name: o.name,
+                    password_hash: o.passwordHash,
+                    created_at: o.createdAt
+                  }))
+                  await supabase.from('organizers').upsert(baseOrgRows, { onConflict: 'email' })
                 }
               } catch (err: any) {
                 console.warn('[DB] Organizer sync error:', err?.message || err)

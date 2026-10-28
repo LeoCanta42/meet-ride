@@ -17,7 +17,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const existingEvent = db.events[eventIndex]
-  if (!existingEvent || existingEvent.organizerId !== organizer.id) {
+  const isAdmin = organizer.role === 'admin' || organizer.isAdmin === true
+  if (!existingEvent || (existingEvent.organizerId !== organizer.id && !isAdmin)) {
     throw createError({ statusCode: 403, statusMessage: 'Non puoi modificare questo evento' })
   }
 

@@ -12,6 +12,16 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const isAdmin = organizer.role === 'admin' || organizer.isAdmin === true
+  const isApproved = isAdmin || organizer.isApproved === true
+
+  if (!isApproved) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Il tuo account è in attesa di abilitazione da parte dell\'amministratore prima di poter creare nuovi eventi.'
+    })
+  }
+
   const body = await readBody(event)
   const { title, description, destination, destinationCoords, eventDate, arrivalTime, sharedPassword } = body || {}
 

@@ -15,6 +15,8 @@ export interface Database {
           email: string
           name: string
           password_hash: string | null
+          role: string | null
+          is_approved: boolean | null
           created_at: string
         }
         Insert: {
@@ -22,6 +24,8 @@ export interface Database {
           email: string
           name: string
           password_hash?: string | null
+          role?: string | null
+          is_approved?: boolean | null
           created_at?: string
         }
         Update: {
@@ -29,6 +33,8 @@ export interface Database {
           email?: string
           name?: string
           password_hash?: string | null
+          role?: string | null
+          is_approved?: boolean | null
           created_at?: string
         }
         Relationships: []
