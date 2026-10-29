@@ -21,6 +21,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const isDriverOfCar = computed(() => {
+  return Boolean(props.car && props.car.driver?.id === props.passenger?.id)
+})
+
 const cleanPhone = computed(() => {
   if (!props.passenger?.phone) return ''
   return props.passenger.phone.replace(/[\s()-]/g, '')
@@ -94,9 +98,13 @@ function handleDelete() {
                 Tu
               </span>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span class="inline-block h-2 w-2 rounded-full" :class="car ? 'bg-emerald-500' : 'bg-amber-500'" />
-              <span>{{ car ? `A bordo di: ${car.rider.carModel || 'Auto'} (${car.rider.name})` : 'In attesa di assegnazione' }}</span>
+              <span v-if="isDriverOfCar" class="font-medium text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                <UIcon name="i-tabler-steering-wheel" class="h-3.5 w-3.5" />
+                <span>Autista di: {{ car?.rider.carModel || 'Auto' }} ({{ car?.rider.name }})</span>
+              </span>
+              <span v-else>{{ car ? `A bordo di: ${car.rider.carModel || 'Auto'} (${car.rider.name})` : 'In attesa di assegnazione' }}</span>
             </p>
           </div>
         </div>
@@ -194,7 +202,7 @@ function handleDelete() {
               class="text-xs font-semibold"
             >
               <UIcon name="i-lucide-log-out" class="h-3.5 w-3.5 mr-1 text-amber-600" />
-              Rimuovi dall'auto
+              {{ isDriverOfCar ? 'Rimuovi da ruolo autista' : 'Rimuovi dall\'auto' }}
             </UButton>
 
             <UButton

@@ -121,6 +121,7 @@ export interface Database {
           departure_lat: number | null
           departure_lng: number | null
           has_driver: boolean | null
+          driver_participant_id?: string | null
           owner_participant_id: string | null
           assigned_rider_id: string | null
           token: string
@@ -145,6 +146,7 @@ export interface Database {
           departure_lat?: number | null
           departure_lng?: number | null
           has_driver?: boolean | null
+          driver_participant_id?: string | null
           owner_participant_id?: string | null
           assigned_rider_id?: string | null
           token: string
@@ -169,6 +171,7 @@ export interface Database {
           departure_lat?: number | null
           departure_lng?: number | null
           has_driver?: boolean | null
+          driver_participant_id?: string | null
           owner_participant_id?: string | null
           assigned_rider_id?: string | null
           token?: string

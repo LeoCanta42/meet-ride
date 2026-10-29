@@ -22,6 +22,10 @@ const {
   updateParticipantAsOrganizer,
   deleteParticipantAsOrganizer,
   assignPassengerAsOrganizer,
+  assignDriver,
+  unassignDriver,
+  becomeDriver,
+  stepDownDriver,
   updateEventDetails,
   calculateConvoyRoute,
   deleteCar,
@@ -43,6 +47,71 @@ const modalInitialData = ref<Participant | null>(null)
 const actionLoading = ref(false)
 const carActionLoadingId = ref<string | null>(null)
 
+// Drag and Drop State
+interface DragPayload {
+  passengerId: string
+  passengerName: string
+  fromRiderId?: string | null
+  isDriver?: boolean
+}
+const draggedItem = ref<DragPayload | null>(null)
+const isDragOverUnassigned = ref(false)
+
+function canDragPassenger(p: Participant): boolean {
+  if (isOrganizer.value) return true
+  return myParticipant.value?.id === p.id
+}
+
+function handleDragStart(event: DragEvent, payload: DragPayload) {
+  draggedItem.value = payload
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('application/json', JSON.stringify(payload))
+    event.dataTransfer.setData('text/plain', payload.passengerId)
+  }
+}
+
+function handleDragEnd() {
+  draggedItem.value = null
+  isDragOverUnassigned.value = false
+}
+
+function onDragOverUnassigned(event: DragEvent) {
+  isDragOverUnassigned.value = true
+}
+
+function onDragLeaveUnassigned(event: DragEvent) {
+  const rect = (event.currentTarget as HTMLElement)?.getBoundingClientRect()
+  if (rect) {
+    if (event.clientX <= rect.left || event.clientX >= rect.right || event.clientY <= rect.top || event.clientY >= rect.bottom) {
+      isDragOverUnassigned.value = false
+    }
+  } else {
+    isDragOverUnassigned.value = false
+  }
+}
+
+// Driver Assignment Modal State (Organizer)
+const showDriverAssignModal = ref(false)
+const targetRiderIdForDriver = ref('')
+
+const driverlessCarTarget = computed(() => {
+  return cars.value.find(c => c.rider.id === targetRiderIdForDriver.value) || null
+})
+
+const eligibleCandidatesForDriver = computed(() => {
+  const list: { participant: Participant; currentCarModel?: string }[] = []
+  for (const p of unassignedPassengers.value) {
+    list.push({ participant: p })
+  }
+  for (const c of cars.value) {
+    for (const p of c.passengers) {
+      list.push({ participant: p, currentCarModel: c.rider.carModel || c.rider.name })
+    }
+  }
+  return list
+})
+
 // Organizer Control state (Feature 2)
 const isOrganizerAction = ref(false)
 const showAssignModal = ref(false)
@@ -59,7 +128,7 @@ function handleShowPassengerDetail(passenger: Participant, car?: CarWithSeats | 
   if (car) {
     selectedPassengerCar.value = car
   } else {
-    selectedPassengerCar.value = cars.value.find(c => c.passengers.some(p => p.id === passenger.id)) || null
+    selectedPassengerCar.value = cars.value.find(c => c.passengers.some(p => p.id === passenger.id) || c.driver?.id === passenger.id) || null
   }
   showPassengerModal.value = true
 }
@@ -283,6 +352,245 @@ async function handleConfirmAssign(riderId: string) {
     }
   } finally {
     actionLoading.value = false
+  }
+}
+
+async function handleConfirmAssignAsDriver(riderId: string) {
+  if (!passengerToAssign.value) return
+  actionLoading.value = true
+  try {
+    const res = await assignDriver(riderId, passengerToAssign.value.id)
+    if (res.success) {
+      toast.add({ title: 'Autista assegnato con successo!', color: 'success' })
+      showAssignModal.value = false
+      passengerToAssign.value = null
+    } else {
+      toast.add({ title: 'Errore assegnazione autista', description: res.error, color: 'error' })
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function handleConfirmDriverSelection(passengerId: string) {
+  if (!targetRiderIdForDriver.value) return
+  actionLoading.value = true
+  try {
+    const res = await assignDriver(targetRiderIdForDriver.value, passengerId)
+    if (res.success) {
+      toast.add({ title: 'Autista assegnato con successo!', color: 'success' })
+      showDriverAssignModal.value = false
+      targetRiderIdForDriver.value = ''
+    } else {
+      toast.add({ title: 'Errore assegnazione autista', description: res.error, color: 'error' })
+    }
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+async function handleBecomeDriver(riderId: string) {
+  carActionLoadingId.value = riderId
+  try {
+    const res = await becomeDriver(riderId)
+    if (res.success) {
+      toast.add({
+        title: 'Sei ora l\'autista di questa vettura!',
+        description: 'Grazie per esserti offerto/a come autista.',
+        color: 'success'
+      })
+    } else {
+      toast.add({ title: 'Errore', description: res.error, color: 'error' })
+    }
+  } finally {
+    carActionLoadingId.value = null
+  }
+}
+
+async function handleStepDownDriver(riderId: string) {
+  if (confirm('Vuoi davvero rinunciare al ruolo di autista per questa vettura?')) {
+    carActionLoadingId.value = riderId
+    try {
+      const res = await stepDownDriver(riderId)
+      if (res.success) {
+        toast.add({
+          title: 'Ruolo di autista rilasciato',
+          description: 'La vettura è tornata in cerca di un guidatore.',
+          color: 'neutral'
+        })
+      } else {
+        toast.add({ title: 'Errore', description: res.error, color: 'error' })
+      }
+    } finally {
+      carActionLoadingId.value = null
+    }
+  }
+}
+
+function handleOrganizerAssignDriverClick(riderId: string) {
+  targetRiderIdForDriver.value = riderId
+  showDriverAssignModal.value = true
+}
+
+async function handleOrganizerRemoveDriver(riderId: string) {
+  if (confirm('Vuoi rimuovere l\'autista da questa vettura? Tornerà senza guidatore.')) {
+    carActionLoadingId.value = riderId
+    try {
+      const res = await unassignDriver(riderId)
+      if (res.success) {
+        toast.add({ title: 'Autista rimosso con successo', color: 'neutral' })
+      } else {
+        toast.add({ title: 'Errore', description: res.error, color: 'error' })
+      }
+    } finally {
+      carActionLoadingId.value = null
+    }
+  }
+}
+
+// Drag & Drop Handlers
+async function handleDropOnCar(targetRiderId: string, event: DragEvent) {
+  let payload = draggedItem.value
+  if (!payload && event.dataTransfer) {
+    try {
+      const str = event.dataTransfer.getData('application/json')
+      if (str) payload = JSON.parse(str)
+    } catch {}
+  }
+  if (!payload) return
+
+  if (payload.fromRiderId === targetRiderId && !payload.isDriver) {
+    handleDragEnd()
+    return
+  }
+
+  const targetCar = cars.value.find(c => c.rider.id === targetRiderId)
+  if (!targetCar) {
+    handleDragEnd()
+    return
+  }
+
+  if (targetCar.isFull) {
+    toast.add({
+      title: 'Auto al completo',
+      description: `${targetCar.rider.carModel || 'Questa vettura'} non ha posti passeggeri disponibili.`,
+      color: 'warning'
+    })
+    handleDragEnd()
+    return
+  }
+
+  carActionLoadingId.value = targetRiderId
+  try {
+    if (payload.isDriver && payload.fromRiderId) {
+      await unassignDriver(payload.fromRiderId)
+    }
+
+    let res
+    if (isOrganizer.value) {
+      res = await assignPassengerAsOrganizer(payload.passengerId, targetRiderId)
+    } else if (myParticipant.value?.id === payload.passengerId) {
+      res = await selectCar(targetRiderId)
+    }
+
+    if (res?.success) {
+      toast.add({
+        title: 'Passeggero assegnato!',
+        description: `${payload.passengerName} è a bordo di ${targetCar.rider.carModel || targetCar.rider.name}.`,
+        color: 'success'
+      })
+    } else if (res?.error) {
+      toast.add({ title: 'Errore', description: res.error, color: 'error' })
+    }
+  } finally {
+    carActionLoadingId.value = null
+    handleDragEnd()
+  }
+}
+
+async function handleDropOnDriver(targetRiderId: string, event: DragEvent) {
+  let payload = draggedItem.value
+  if (!payload && event.dataTransfer) {
+    try {
+      const str = event.dataTransfer.getData('application/json')
+      if (str) payload = JSON.parse(str)
+    } catch {}
+  }
+  if (!payload) return
+
+  if (payload.fromRiderId === targetRiderId && payload.isDriver) {
+    handleDragEnd()
+    return
+  }
+
+  const targetCar = cars.value.find(c => c.rider.id === targetRiderId)
+  if (!targetCar) {
+    handleDragEnd()
+    return
+  }
+
+  carActionLoadingId.value = targetRiderId
+  try {
+    const res = await assignDriver(targetRiderId, payload.passengerId)
+    if (res.success) {
+      toast.add({
+        title: 'Autista assegnato!',
+        description: `${payload.passengerName} è ora l'autista di ${targetCar.rider.carModel || targetCar.rider.name}.`,
+        color: 'success'
+      })
+    } else {
+      toast.add({ title: 'Errore', description: res.error, color: 'error' })
+    }
+  } finally {
+    carActionLoadingId.value = null
+    handleDragEnd()
+  }
+}
+
+async function handleDropOnUnassigned(event: DragEvent) {
+  let payload = draggedItem.value
+  if (!payload && event.dataTransfer) {
+    try {
+      const str = event.dataTransfer.getData('application/json')
+      if (str) payload = JSON.parse(str)
+    } catch {}
+  }
+  if (!payload) return
+
+  if (!payload.fromRiderId && !payload.isDriver) {
+    handleDragEnd()
+    return
+  }
+
+  actionLoading.value = true
+  try {
+    if (payload.isDriver && payload.fromRiderId) {
+      const res = await unassignDriver(payload.fromRiderId)
+      if (res.success) {
+        toast.add({
+          title: 'Autista rimosso',
+          description: `${payload.passengerName} è ora in lista d'attesa.`,
+          color: 'neutral'
+        })
+      }
+    } else {
+      let res
+      if (isOrganizer.value) {
+        res = await assignPassengerAsOrganizer(payload.passengerId, null)
+      } else if (myParticipant.value?.id === payload.passengerId) {
+        res = await selectCar(null)
+      }
+      if (res?.success) {
+        toast.add({
+          title: 'Spostato/a in lista d\'attesa',
+          description: `${payload.passengerName} è ora in lista d'attesa.`,
+          color: 'neutral'
+        })
+      }
+    }
+  } finally {
+    actionLoading.value = false
+    handleDragEnd()
   }
 }
 
@@ -902,6 +1210,7 @@ const totalPassengersCount = computed(() => {
             :my-participant="myParticipant"
             :is-organizer="isOrganizer"
             :loading="carActionLoadingId === car.rider.id"
+            :is-dragging="Boolean(draggedItem)"
             @select-car="handleSelectCar"
             @leave-car="handleLeaveCar"
             @prompt-join="handlePromptJoin"
@@ -910,12 +1219,36 @@ const totalPassengersCount = computed(() => {
             @delete-car="handleDeleteCar"
             @remove-passenger="handleOrganizerRemovePassengerFromCar"
             @show-passenger="handleShowPassengerDetail"
+            @become-driver="handleBecomeDriver"
+            @step-down-driver="handleStepDownDriver"
+            @assign-driver="handleOrganizerAssignDriverClick"
+            @remove-driver="handleOrganizerRemoveDriver"
+            @drag-start="handleDragStart"
+            @drop-on-car="handleDropOnCar"
+            @drop-on-driver="handleDropOnDriver"
           />
         </div>
       </div>
 
       <!-- Unassigned Passengers Section -->
-      <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+      <div
+        class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800 rounded-2xl transition-all p-2 -mx-2"
+        :class="[
+          isDragOverUnassigned ? 'ring-2 ring-dashed ring-amber-500 bg-amber-50/40 dark:bg-amber-950/20 shadow-md' : ''
+        ]"
+        @dragover.prevent="onDragOverUnassigned"
+        @dragleave="onDragLeaveUnassigned"
+        @drop.prevent="handleDropOnUnassigned"
+      >
+        <!-- Overlay banner when dragging over unassigned list -->
+        <div
+          v-if="isDragOverUnassigned"
+          class="rounded-xl bg-amber-500 text-white text-xs font-bold p-2 text-center shadow-sm flex items-center justify-center gap-1.5 animate-pulse"
+        >
+          <UIcon name="i-lucide-arrow-down-circle" class="h-4 w-4" />
+          <span>Rilascia qui per spostare in lista d'attesa (senza auto)</span>
+        </div>
+
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-users" class="h-5 w-5 text-amber-500 shrink-0" />
@@ -945,16 +1278,25 @@ const totalPassengersCount = computed(() => {
             class="surface-card rounded-xl p-3.5 space-y-1.5 border border-slate-200/80 dark:border-slate-800 transition-all"
             :class="[
               passenger.id === myParticipant?.id ? 'ring-2 ring-amber-500 bg-amber-50/20 dark:bg-amber-950/20' : '',
+              canDragPassenger(passenger) ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : '',
               !myParticipant ? 'hover:border-sky-300 dark:hover:border-sky-800' : ''
             ]"
+            :draggable="canDragPassenger(passenger)"
+            @dragstart="canDragPassenger(passenger) ? handleDragStart($event, { passengerId: passenger.id, passengerName: passenger.name, fromRiderId: null, isDriver: false }) : null"
+            @dragend="handleDragEnd"
           >
             <div class="flex items-center justify-between">
               <button
                 type="button"
                 @click="handleShowPassengerDetail(passenger, null)"
                 class="font-bold text-slate-900 dark:text-white text-xs hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer text-left flex items-center gap-1.5 transition-colors"
-                :title="'Visualizza dettagli di ' + passenger.name"
+                :title="'Visualizza dettagli di ' + passenger.name + (canDragPassenger(passenger) ? ' (Trascina verso un\'auto)' : '')"
               >
+                <UIcon
+                  v-if="canDragPassenger(passenger)"
+                  name="i-lucide-grip-vertical"
+                  class="h-3.5 w-3.5 text-slate-400 shrink-0 opacity-70 -ml-1"
+                />
                 <UIcon name="i-lucide-user" class="h-3.5 w-3.5 text-slate-400" />
                 <span>{{ passenger.name }}</span>
               </button>
@@ -1070,8 +1412,8 @@ const totalPassengersCount = computed(() => {
     <UModal
       :open="showAssignModal"
       @update:open="showAssignModal = $event"
-      title="Assegna Passeggero a un'Auto"
-      :description="`Seleziona l'auto per ${passengerToAssign?.name || 'il passeggero'}`"
+      title="Assegna Partecipante a un'Auto"
+      :description="`Seleziona la modalità e l'auto per ${passengerToAssign?.name || 'il passeggero'}`"
       :ui="{ content: 'sm:max-w-md' }"
     >
       <template #body>
@@ -1079,30 +1421,90 @@ const totalPassengersCount = computed(() => {
           <div v-if="cars.length === 0" class="text-xs text-slate-400 text-center py-4">
             Nessuna vettura presente per questo evento.
           </div>
-          <button
+          <div
             v-for="car in cars"
             :key="car.rider.id"
+            class="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2 transition-all hover:bg-slate-50/50 dark:hover:bg-slate-900/40"
+          >
+            <div class="flex items-center justify-between">
+              <div class="min-w-0 pr-2">
+                <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
+                  {{ car.rider.name }}
+                </div>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                  {{ car.rider.carModel || 'Auto' }} • Partenza: {{ car.rider.departureLocation || 'Non specificato' }}
+                </div>
+              </div>
+              <span
+                class="shrink-0 text-[10px] font-bold rounded-full px-2 py-0.5"
+                :class="car.isFull ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'"
+              >
+                {{ car.isFull ? 'Al completo' : `${car.availableSeats} liberi` }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/60">
+              <UButton
+                size="xs"
+                color="primary"
+                variant="solid"
+                :disabled="car.isFull"
+                @click="handleConfirmAssign(car.rider.id)"
+                class="text-xs font-semibold flex-1 justify-center"
+              >
+                <UIcon name="i-lucide-user" class="h-3.5 w-3.5 mr-1" />
+                Come passeggero
+              </UButton>
+
+              <UButton
+                v-if="!car.hasDriver || !car.driver"
+                size="xs"
+                color="success"
+                variant="subtle"
+                @click="handleConfirmAssignAsDriver(car.rider.id)"
+                class="text-xs font-semibold flex-1 justify-center"
+              >
+                <UIcon name="i-tabler-steering-wheel" class="h-3.5 w-3.5 mr-1" />
+                Come autista
+              </UButton>
+            </div>
+          </div>
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Organizer Assign Driver Modal -->
+    <UModal
+      :open="showDriverAssignModal"
+      @update:open="showDriverAssignModal = $event"
+      title="Assegna Autista alla Vettura"
+      :description="driverlessCarTarget ? `Scegli chi guiderà ${driverlessCarTarget.rider.carModel || driverlessCarTarget.rider.name}` : 'Seleziona un partecipante da impostare come autista'"
+      :ui="{ content: 'sm:max-w-md' }"
+    >
+      <template #body>
+        <div class="space-y-2 max-h-96 overflow-y-auto">
+          <div v-if="eligibleCandidatesForDriver.length === 0" class="text-xs text-slate-400 text-center py-4">
+            Nessun passeggero disponibile.
+          </div>
+          <button
+            v-for="cand in eligibleCandidatesForDriver"
+            :key="cand.participant.id"
             type="button"
-            class="w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all"
-            :class="car.isFull
-              ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-              : 'hover:border-sky-500 hover:bg-sky-50/50 cursor-pointer border-slate-200 dark:border-slate-800'"
-            :disabled="car.isFull"
-            @click="handleConfirmAssign(car.rider.id)"
+            class="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/30 text-left flex items-center justify-between transition-all cursor-pointer"
+            @click="handleConfirmDriverSelection(cand.participant.id)"
           >
             <div class="min-w-0 pr-2">
               <div class="font-bold text-xs text-slate-900 dark:text-white truncate">
-                {{ car.rider.name }}
+                {{ cand.participant.name }}
               </div>
               <div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                {{ car.rider.carModel || 'Auto' }} • Partenza: {{ car.rider.departureLocation || 'Non specificato' }}
+                {{ cand.currentCarModel ? `Attualmente in: ${cand.currentCarModel}` : 'In lista d\'attesa' }}
+                {{ cand.participant.pickupLocation ? `• ${cand.participant.pickupLocation}` : '' }}
               </div>
             </div>
-            <span
-              class="shrink-0 text-xs font-bold rounded-full px-2 py-0.5"
-              :class="car.isFull ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'"
-            >
-              {{ car.isFull ? 'Al completo' : `${car.availableSeats} liberi` }}
+            <span class="shrink-0 text-[10px] font-bold rounded-lg px-2 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
+              <UIcon name="i-tabler-steering-wheel" class="h-3 w-3" />
+              <span>Imposta autista</span>
             </span>
           </button>
         </div>

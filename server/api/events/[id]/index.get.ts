@@ -97,12 +97,22 @@ export default defineEventHandler(async (event) => {
   const passengers = eventParticipants.filter(p => p.role === 'passenger')
 
   const cars: CarWithSeats[] = riders.map(rider => {
+    // Resolve designated driver if this car has a passenger assigned as driver
+    const designatedDriver = rider.driverParticipantId
+      ? (passengers.find(p => p.id === rider.driverParticipantId) || db.participants.find(p => p.id === rider.driverParticipantId) || null)
+      : null
+
+    // Effective driver: either designated driver or rider if car originally has driver
+    const effectiveDriver = designatedDriver || (rider.hasDriver !== false ? rider : null)
+    const hasDriver = Boolean(designatedDriver || rider.hasDriver !== false)
+
+    // Passenger seats exclude any passenger who took the driver role
     const carPassengers = passengers
-      .filter(p => p.assignedRiderId === rider.id)
+      .filter(p => p.assignedRiderId === rider.id && (!rider.driverParticipantId || p.id !== rider.driverParticipantId))
       .map(p => sanitizeParticipantForClient(p, callerTokens, myParticipantRaw?.id))
+
     const total = rider.totalSeats || 4
     const occupied = carPassengers.length
-    const hasDriver = rider.hasDriver !== false
     const peopleCount = (hasDriver ? 1 : 0) + occupied
     const totalPrice = typeof rider.price === 'number' && rider.price > 0 ? rider.price : null
     const pricePerPerson = totalPrice !== null && peopleCount > 0 ? Math.round((totalPrice / peopleCount) * 100) / 100 : null
@@ -111,6 +121,7 @@ export default defineEventHandler(async (event) => {
     return {
       rider: sanitizeParticipantForClient(rider, callerTokens, myParticipantRaw?.id),
       passengers: carPassengers,
+      driver: effectiveDriver ? sanitizeParticipantForClient(effectiveDriver, callerTokens, myParticipantRaw?.id) : null,
       totalSeats: total,
       occupiedSeats: occupied,
       availableSeats: Math.max(0, total - occupied),

@@ -46,6 +46,14 @@ export default defineEventHandler(async (event) => {
 
   const idsToDelete: string[] = [target.id]
 
+  // If this participant was a driver of any car, reset that car to driverless
+  db.participants.forEach(p => {
+    if (p.eventId === foundEvent.id && p.driverParticipantId === target.id) {
+      p.driverParticipantId = null
+      p.hasDriver = false
+    }
+  })
+
   // If this participant was a rider, unassign passengers in their car
   if (target.role === 'rider') {
     db.participants.forEach(p => {
@@ -71,12 +79,21 @@ export default defineEventHandler(async (event) => {
   // Clean up any deleted rider IDs from manual meetingPoints
   if (Array.isArray(foundEvent.meetingPoints) && foundEvent.meetingPoints.length > 0) {
     const deletedSet = new Set(idsToDelete)
-    foundEvent.meetingPoints = foundEvent.meetingPoints
+    let remainingMps = foundEvent.meetingPoints
       .map(mp => ({
         ...mp,
         riderIds: (mp.riderIds || []).filter(rid => !deletedSet.has(rid))
       }))
-      .filter(mp => mp.riderIds.length >= 2)
+      .filter(mp => (mp.riderIds.length + (mp.meetingPointIds?.length || 0)) >= 2)
+
+    // Clean up meetingPointIds pointing to removed meeting points
+    const remainingIds = new Set(remainingMps.map(m => m.id))
+    foundEvent.meetingPoints = remainingMps
+      .map(mp => ({
+        ...mp,
+        meetingPointIds: (mp.meetingPointIds || []).filter(mid => remainingIds.has(mid))
+      }))
+      .filter(mp => (mp.riderIds.length + (mp.meetingPointIds?.length || 0)) >= 2)
   }
 
   // Clear outdated routePlan when participants are removed

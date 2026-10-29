@@ -149,7 +149,7 @@ function computeRouteFingerprint(
   const arrTime = (arrivalTime || '').trim()
 
   const mps = (meetingPoints || [])
-    .map(mp => `${(mp.name || '').trim().toLowerCase()}#${mp.time || ''}#${(mp.riderIds || []).slice().sort().join(',')}`)
+    .map(mp => `${(mp.name || '').trim().toLowerCase()}#${mp.time || ''}#${(mp.riderIds || []).slice().sort().join(',')}#${((mp as any).meetingPointIds || []).slice().sort().join(',')}`)
     .sort()
     .join('|')
 
@@ -333,106 +333,26 @@ const computedCarRoutes = computed<CarRouteItem[]>(() => {
     })
   })
 
-  // Pass 2: Partition each car's stops into pre-meeting vs post-meeting (convoy) stops
-  const carSplitMap = rawCarWps.map(({ carName, color, relevantWps }) => {
-    const startWp = relevantWps.find(w => w.type === 'start')
-    const sharedMpWp = relevantWps.find(
-      w => w.type === 'meeting_point' && (wpCarCount.get(w) || 0) >= 2
-    )
+  // Pass 2: Partition each car's stops into individual leg (up to its first meeting point) vs full trip
+  return rawCarWps.map(({ carName, color, relevantWps }) => {
+    // Find the car's FIRST meeting point in chronological order
+    const firstMpWp = relevantWps.find(w => w.type === 'meeting_point')
 
-    if (!sharedMpWp) {
-      return {
-        carName,
-        color,
-        sharedMpWp: null as ConvoyWaypoint | null,
-        preWps: [...relevantWps],
-        postPickups: [] as ConvoyWaypoint[]
-      }
-    }
-
-    const preWps: ConvoyWaypoint[] = []
-    const postPickups: ConvoyWaypoint[] = []
-
-    for (const wp of relevantWps) {
-      if (wp === sharedMpWp || wp.type === 'destination') continue
-      if (wp.type === 'start') {
-        preWps.push(wp)
-        continue
-      }
-      if (wp.type === 'pickup') {
-        if (isWaypointAfterMeetingPoint(startWp, wp, sharedMpWp, destinationWp)) {
-          postPickups.push(wp)
-        } else {
-          preWps.push(wp)
-        }
-      } else {
-        preWps.push(wp)
-      }
-    }
-
-    return {
-      carName,
-      color,
-      sharedMpWp,
-      preWps,
-      postPickups
-    }
-  })
-
-  // Group shared post-meeting pickups per meeting_point so all merged cars follow the exact same single track
-  const mpSharedPostPickups = new Map<ConvoyWaypoint, ConvoyWaypoint[]>()
-  for (const item of carSplitMap) {
-    if (!item.sharedMpWp) continue
-    const list = mpSharedPostPickups.get(item.sharedMpWp) || []
-    for (const pWp of item.postPickups) {
-      if (!list.includes(pWp)) {
-        list.push(pWp)
-      }
-    }
-    mpSharedPostPickups.set(item.sharedMpWp, list)
-  }
-
-  for (const [mpWp, list] of mpSharedPostPickups.entries()) {
-    list.sort((a, b) => {
-      if (
-        typeof mpWp.lat === 'number' &&
-        typeof mpWp.lng === 'number' &&
-        typeof a.lat === 'number' &&
-        typeof a.lng === 'number' &&
-        typeof b.lat === 'number' &&
-        typeof b.lng === 'number'
-      ) {
-        const dA = haversineKm({ lat: mpWp.lat, lng: mpWp.lng }, { lat: a.lat, lng: a.lng })
-        const dB = haversineKm({ lat: mpWp.lat, lng: mpWp.lng }, { lat: b.lat, lng: b.lng })
-        if (Math.abs(dA - dB) > 0.3) return dA - dB
-      }
-      return parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time)
-    })
-  }
-
-  // Pass 3: Build final individual car leg (up to meeting_point) and fullWaypoints (including shared convoy leg)
-  return carSplitMap.map(({ carName, color, sharedMpWp, preWps }) => {
-    if (!sharedMpWp) {
-      const points = preWps
+    if (!firstMpWp) {
+      const points = relevantWps
         .filter(w => typeof w.lat === 'number' && typeof w.lng === 'number')
         .map(w => [w.lat, w.lng] as [number, number])
       return {
         carName,
         color,
         points,
-        waypoints: preWps,
-        fullWaypoints: preWps
+        waypoints: relevantWps,
+        fullWaypoints: relevantWps
       }
     }
 
-    const individualWps = [...preWps, sharedMpWp]
-    const postList = mpSharedPostPickups.get(sharedMpWp) || []
-    const fullWaypoints = [
-      ...individualWps,
-      ...postList,
-      ...(destinationWp ? [destinationWp] : [])
-    ]
-
+    const firstMpIdx = relevantWps.indexOf(firstMpWp)
+    const individualWps = relevantWps.slice(0, firstMpIdx + 1)
     const points = individualWps
       .filter(w => typeof w.lat === 'number' && typeof w.lng === 'number')
       .map(w => [w.lat, w.lng] as [number, number])
@@ -442,59 +362,76 @@ const computedCarRoutes = computed<CarRouteItem[]>(() => {
       color,
       points,
       waypoints: individualWps,
-      fullWaypoints
+      fullWaypoints: relevantWps
     }
   })
 })
 
-// Build ONE single unified convoy track from each shared meeting_point through all post-meeting pickups to destination
+// Build single unified convoy tracks for each meeting point (including chained / hierarchical meeting points)
 const computedConvoySegments = computed<ConvoySegmentItem[]>(() => {
-  const routes = computedCarRoutes.value
-  if (routes.length <= 1) return []
+  const plan = activePlan.value
+  if (!plan || !plan.waypoints || plan.waypoints.length === 0) return []
 
-  const mpMap = new Map<ConvoyWaypoint, CarRouteItem[]>()
-  routes.forEach(r => {
-    const mpWp = r.waypoints[r.waypoints.length - 1]
-    if (mpWp && mpWp.type === 'meeting_point') {
-      const list = mpMap.get(mpWp) || []
-      list.push(r)
-      mpMap.set(mpWp, list)
-    }
-  })
+  const waypoints = plan.waypoints
+  const destinationWp = waypoints.find(w => w.type === 'destination')
+  const meetingPointWps = waypoints
+    .filter(w => w.type === 'meeting_point')
+    .sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
+
+  if (meetingPointWps.length === 0) return []
 
   const segments: ConvoySegmentItem[] = []
-  let idx = 0
+  let segIdx = 0
 
-  for (const [mpWp, participatingRoutes] of mpMap.entries()) {
-    if (participatingRoutes.length < 2) continue
-    const sampleRoute = participatingRoutes[0]!
-    const mpIdx = sampleRoute.fullWaypoints.indexOf(mpWp)
-    if (mpIdx === -1) continue
+  for (const mpWp of meetingPointWps) {
+    const mpCars = (mpWp.carNames || []).map(c => c.trim().toLowerCase())
+    if (mpCars.length < 2) continue
 
-    const convoyWps = sampleRoute.fullWaypoints
-      .slice(mpIdx)
-      .filter(w => typeof w.lat === 'number' && typeof w.lng === 'number')
+    // Find next target: either the earliest downstream meeting point that shares these cars, OR the destination
+    const subsequentMps = meetingPointWps.filter(
+      other => other !== mpWp &&
+        parseTimeToMinutes(other.time) > parseTimeToMinutes(mpWp.time) &&
+        (other.carNames || []).some(cn => mpCars.includes(cn.trim().toLowerCase()))
+    )
+    const nextTargetWp = subsequentMps[0] || destinationWp
+    if (!nextTargetWp) continue
+
+    const mpMin = parseTimeToMinutes(mpWp.time)
+    const targetMin = parseTimeToMinutes(nextTargetWp.time)
+
+    // Intermediate pickup waypoints along this convoy segment
+    const intermediatePickups = waypoints.filter(w => {
+      if (w.type !== 'pickup') return false
+      const wMin = parseTimeToMinutes(w.time)
+      if (wMin <= mpMin || wMin >= targetMin) return false
+      return (w.carNames || []).some(cn => mpCars.includes(cn.trim().toLowerCase()))
+    }).sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
+
+    const convoyWps = [
+      mpWp,
+      ...intermediatePickups,
+      nextTargetWp
+    ].filter(w => typeof w.lat === 'number' && typeof w.lng === 'number')
 
     if (convoyWps.length < 2) continue
 
-    const color = CONVOY_COLORS[idx % CONVOY_COLORS.length] || '#10b981'
+    const color = CONVOY_COLORS[segIdx % CONVOY_COLORS.length] || '#10b981'
     const fromWp = convoyWps[0]!
     const toWp = convoyWps[convoyWps.length - 1]!
     const points = convoyWps.map(w => [w.lat, w.lng] as [number, number])
-    const stopNames = convoyWps.map(w => w.name)
-    const label = `Convoglio: ${stopNames.join(' → ')}`
+    const label = `Convoglio: ${fromWp.name} → ${toWp.name}`
 
     segments.push({
-      id: `convoy_${idx}_${fromWp.lat.toFixed(4)}_${fromWp.lng.toFixed(4)}`,
+      id: `convoy_${segIdx}_${fromWp.lat.toFixed(4)}_${fromWp.lng.toFixed(4)}`,
       label,
       color,
       fromWp,
       toWp,
       waypoints: convoyWps,
       points,
-      carNames: participatingRoutes.map(r => r.carName)
+      carNames: mpWp.carNames || []
     })
-    idx++
+    segIdx++
   }
 
   return segments

@@ -57,14 +57,14 @@ export function formatMinutesToTime(minutes: number): string {
 export function computeRouteFingerprint(
   destination?: string | null,
   arrivalTime?: string | null,
-  meetingPoints?: { name: string; time?: string | null; riderIds: string[] }[] | null,
+  meetingPoints?: { name: string; time?: string | null; riderIds: string[]; meetingPointIds?: string[] }[] | null,
   cars?: { rider: Participant; passengers: Participant[] }[] | null
 ): string {
   const dest = (destination || '').trim().toLowerCase()
   const arrTime = (arrivalTime || '').trim()
 
   const mps = (meetingPoints || [])
-    .map(mp => `${mp.name.trim().toLowerCase()}#${mp.time || ''}#${(mp.riderIds || []).slice().sort().join(',')}`)
+    .map(mp => `${mp.name.trim().toLowerCase()}#${mp.time || ''}#${(mp.riderIds || []).slice().sort().join(',')}#${((mp as any).meetingPointIds || []).slice().sort().join(',')}`)
     .sort()
     .join('|')
 
@@ -83,6 +83,33 @@ export function computeRouteFingerprint(
     .join('||')
 
   return `${dest}__${arrTime}__${mps}__${carsPart}`
+}
+
+export function getAllRiderIdsForMeetingPoint(
+  mp: { riderIds?: string[]; meetingPointIds?: string[] },
+  allMps: Array<{ id: string; riderIds?: string[]; meetingPointIds?: string[] }>
+): string[] {
+  const result = new Set<string>(mp.riderIds || [])
+  const visitedMps = new Set<string>()
+
+  function traverse(mId: string) {
+    if (visitedMps.has(mId)) return
+    visitedMps.add(mId)
+    const childMp = allMps.find(m => m.id === mId)
+    if (!childMp) return
+    for (const rId of childMp.riderIds || []) {
+      result.add(rId)
+    }
+    for (const nextMId of childMp.meetingPointIds || []) {
+      traverse(nextMId)
+    }
+  }
+
+  for (const mId of mp.meetingPointIds || []) {
+    traverse(mId)
+  }
+
+  return Array.from(result)
 }
 
 export async function geocodePlaceName(
@@ -275,7 +302,9 @@ export async function calculateConvoyRouteWithGemini(
         r.departureCoords = startCoords
       }
 
-      const assignedPassengersRaw = passengers.filter(p => p.assignedRiderId === r.id)
+      const assignedPassengersRaw = passengers.filter(
+        p => p.assignedRiderId === r.id && (!r.driverParticipantId || p.id !== r.driverParticipantId)
+      )
       const assignedPassengers = await Promise.all(
         assignedPassengersRaw.map(async (p) => {
           const pCoords =
@@ -316,10 +345,15 @@ export async function calculateConvoyRouteWithGemini(
       const distToDestKm =
         startCoords && destCoords ? Number(haversineKm(startCoords, destCoords).toFixed(1)) : null
 
+      const driverPassenger = r.driverParticipantId
+        ? passengers.find(p => p.id === r.driverParticipantId)
+        : null
+      const effectiveDriverName = driverPassenger ? driverPassenger.name : r.name
+
       return {
         riderId: r.id,
-        driverName: r.name,
-        driverAlias: getFirstAlias(r.name),
+        driverName: effectiveDriverName,
+        driverAlias: getFirstAlias(effectiveDriverName),
         carLabel,
         departureLocation: r.departureLocation || 'Punto di partenza',
         departureTime: r.departureTime || null,
@@ -335,11 +369,22 @@ export async function calculateConvoyRouteWithGemini(
   const resolvedMeetingPoints = (
     await Promise.all(
       rawMeetingPoints.map(async (mp) => {
-        const carLabels = (mp.riderIds || [])
+        const allRiderIds = getAllRiderIdsForMeetingPoint(mp, rawMeetingPoints)
+        const allCarLabels = allRiderIds
           .map(rid => riderIdToCarLabel.get(rid))
           .filter((label): label is string => Boolean(label))
 
-        if (!mp.name || carLabels.length < 2) return null
+        const directCarLabels = (mp.riderIds || [])
+          .map(rid => riderIdToCarLabel.get(rid))
+          .filter((label): label is string => Boolean(label))
+
+        const incomingMeetingPointIds = Array.isArray(mp.meetingPointIds) ? mp.meetingPointIds : []
+        const incomingMeetingPointNames = incomingMeetingPointIds
+          .map(mid => rawMeetingPoints.find(m => m.id === mid)?.name)
+          .filter((name): name is string => Boolean(name))
+
+        const totalUnits = (mp.riderIds || []).length + incomingMeetingPointIds.length
+        if (!mp.name || totalUnits < 2 || allCarLabels.length < 2) return null
 
         const mpCoords =
           mp.coords ||
@@ -349,13 +394,23 @@ export async function calculateConvoyRouteWithGemini(
           mp.coords = mpCoords
         }
 
+        // Downstream target: does this meeting point feed into another meeting point?
+        const parentMp = rawMeetingPoints.find(other => (other.meetingPointIds || []).includes(mp.id))
+        const nextTargetName = parentMp ? parentMp.name : event.destination
+
         return {
           id: mp.id,
           name: mp.name,
           time: mp.time || null,
           notes: mp.notes || '',
-          riderIds: mp.riderIds,
-          carLabels,
+          riderIds: mp.riderIds || [],
+          meetingPointIds: incomingMeetingPointIds,
+          incomingMeetingPointNames,
+          directCarLabels,
+          allCarLabels,
+          carLabels: allCarLabels, // alias for backwards compatibility
+          nextTargetName,
+          parentMpId: parentMp?.id || null,
           coords: mpCoords
         }
       })
@@ -363,8 +418,9 @@ export async function calculateConvoyRouteWithGemini(
   ).filter((mp): mp is NonNullable<typeof mp> => mp !== null)
 
   // Split each car's passengers into pre-meeting-point vs post-meeting-point (convoy leg)
+  // Note: A car's initial meeting point is the one where its riderId is directly listed in riderIds
   const carsWithSplitPassengers = carsWithPassengers.map(c => {
-    const carMp = resolvedMeetingPoints.find(mp => mp.carLabels.includes(c.carLabel))
+    const carMp = resolvedMeetingPoints.find(mp => (mp.riderIds || []).includes(c.riderId))
     if (!carMp) {
       return {
         ...c,
@@ -402,7 +458,7 @@ export async function calculateConvoyRouteWithGemini(
   for (const mp of resolvedMeetingPoints) {
     const postList: Array<(typeof carsWithPassengers)[number]['assignedPassengers'][number] & { assignedCarLabel: string }> = []
     for (const c of carsWithSplitPassengers) {
-      if (mp.carLabels.includes(c.carLabel)) {
+      if (mp.allCarLabels.includes(c.carLabel)) {
         for (const p of c.postMeetingPassengers) {
           postList.push({
             ...p,
@@ -455,7 +511,8 @@ export async function calculateConvoyRouteWithGemini(
             name: carMp.name,
             preferredTime: carMp.time,
             coordinates: carMp.coords ? `${carMp.coords.lat}, ${carMp.coords.lng}` : null,
-            meetsWithCars: carMp.carLabels
+            meetsWithCars: carMp.allCarLabels,
+            nextDestination: carMp.nextTargetName
           }
         : null
     }
@@ -463,13 +520,16 @@ export async function calculateConvoyRouteWithGemini(
 
   const meetingPointsPromptSection =
     resolvedMeetingPoints.length > 0
-      ? `PUNTI DI RITROVO IMPOSTATI DALL'ORGANIZZATORE:
+      ? `PUNTI DI RITROVO IMPOSTATI DALL'ORGANIZZATORE (POSSONO ESSERE ANCHE CONCATENATI / GERARCHICI):
 ${JSON.stringify(
   resolvedMeetingPoints.map(mp => ({
     name: mp.name,
     time: mp.time,
     coordinates: mp.coords ? `${mp.coords.lat}, ${mp.coords.lng}` : null,
-    carNames: mp.carLabels,
+    directCars: mp.directCarLabels,
+    incomingConvoysFromMeetingPoints: mp.incomingMeetingPointNames,
+    allCarsInConvoy: mp.allCarLabels,
+    nextTargetDestination: mp.nextTargetName,
     notes: mp.notes,
     convoyPickupsAfterMeetingPoint: (mpPostPassengersMap.get(mp.id) || []).map(p => ({
       name: p.alias,
@@ -483,9 +543,10 @@ ${JSON.stringify(
 )}
 REGOLE SUI PUNTI DI RITROVO:
 - Usa ESCLUSIVAMENTE i punti di ritrovo manuali elencati qui sopra.
-- Per ciascuno di essi, crea un waypoint con "type": "meeting_point", "name" corrispondente e "carNames" contenente ESATTAMENTE le auto indicate per quel punto di ritrovo.
-- Le auto coinvolte in un punto di ritrovo partono dalla loro "start", passano dai "pickup" in "passengersBeforeMeetingPoint" (con "carNames": ["<carLabel>"]), poi convergono al loro "meeting_point" allo stesso orario.
-- Dal "meeting_point" in poi, le auto riunite proseguono INSIEME lungo un UNICO tracciato di convoglio ("carNames" contenente tutte le auto di quel punto di ritrovo), passando per gli eventuali passeggeri in "convoyPickupsAfterMeetingPoint" fino alla "destination" finale.
+- Per ciascuno di essi, crea un waypoint con "type": "meeting_point", "name" corrispondente e "carNames" contenente TUTTE le auto in convoglio per quel punto di ritrovo ("allCarsInConvoy").
+- Le auto coinvolte partono dalla loro "start", passano dai "pickup" in "passengersBeforeMeetingPoint" (con "carNames": ["<carLabel>"]), poi convergono al rispettivo "meeting_point" iniziale allo stesso orario.
+- Se un punto di ritrovo confluisce in un altro punto di ritrovo ("nextTargetDestination"), le auto riunite proseguono INSIEME in convoglio fino a quel successivo punto di ritrovo, dove si uniscono alle altre auto prima di andare a destinazione.
+- Dal punto di ritrovo finale, tutte le auto proseguono INSIEME in un unico convoglio fino alla destinazione finale "${event.destination}".
 - Le auto che NON sono incluse in alcun punto di ritrovo manuale NON devono avere alcun "meeting_point": dopo i propri "pickup", vanno dritte alla destinazione finale.
 - VIETATO inventare o aggiungere altri "meeting_point" non presenti nella lista dell'organizzatore.`
       : `NESSUN PUNTO DI RITROVO IMPOSTATO:
@@ -593,10 +654,33 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
     })
   }
 
-  // Pre-calculate meeting point times so pre-meeting stops are strictly earlier
-  // and post-meeting stops fit comfortably between mpMin and destMinutes
+  // Pre-calculate meeting point times topographically (downstream targets first)
+  // so child meeting points are strictly earlier than the meeting point or destination they merge into
   const mpTimeMinutesMap = new Map<string, number>()
-  for (const mp of resolvedMeetingPoints) {
+  const resolvingMpIds = new Set<string>()
+
+  function resolveMpMinutes(mpId: string): number {
+    if (mpTimeMinutesMap.has(mpId)) {
+      return mpTimeMinutesMap.get(mpId)!
+    }
+    const mp = resolvedMeetingPoints.find(m => m.id === mpId)
+    if (!mp) return destMinutes - 20
+    if (mp.time) {
+      const parsed = parseTimeToMinutes(mp.time)
+      mpTimeMinutesMap.set(mpId, parsed)
+      return parsed
+    }
+    if (resolvingMpIds.has(mpId)) {
+      return destMinutes - 30
+    }
+    resolvingMpIds.add(mpId)
+
+    const parentMp = resolvedMeetingPoints.find(other => (other.meetingPointIds || []).includes(mp.id))
+    const downstreamMinutes = parentMp ? resolveMpMinutes(parentMp.id) : destMinutes
+    const downstreamCoords = parentMp ? (parentMp.coords || fallbackDestCoords) : (destCoords || fallbackDestCoords)
+
+    resolvingMpIds.delete(mpId)
+
     const postList = mpPostPassengersMap.get(mp.id) || []
     let postChainDistKm = 0
     let prevCoord = mp.coords
@@ -606,8 +690,8 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
       }
       if (p.coords) prevCoord = p.coords
     }
-    if (prevCoord && destCoords) {
-      postChainDistKm += haversineKm(prevCoord, destCoords)
+    if (prevCoord && downstreamCoords) {
+      postChainDistKm += haversineKm(prevCoord, downstreamCoords)
     }
 
     const estimatedPostMinutes = postChainDistKm > 0
@@ -620,17 +704,20 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
           mp.name.toLowerCase().includes(String(w?.name || '').toLowerCase()))
     )
 
-    const maxAllowedMpMin = destMinutes - Math.max(12, (postList.length + 1) * 5)
-    let mpMin = mp.time
-      ? parseTimeToMinutes(mp.time)
-      : aiMp?.time
-        ? parseTimeToMinutes(aiMp.time)
-        : destMinutes - estimatedPostMinutes
+    const maxAllowedMpMin = downstreamMinutes - Math.max(12, (postList.length + 1) * 5)
+    let mpMin = aiMp?.time
+      ? parseTimeToMinutes(aiMp.time)
+      : downstreamMinutes - estimatedPostMinutes
 
     if (mpMin > maxAllowedMpMin) {
       mpMin = maxAllowedMpMin
     }
     mpTimeMinutesMap.set(mp.id, mpMin)
+    return mpMin
+  }
+
+  for (const mp of resolvedMeetingPoints) {
+    resolveMpMinutes(mp.id)
   }
 
   // 1. Build each car's start and PRE-meeting passenger pickup waypoints
@@ -734,7 +821,7 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
 
     // Fallback coordinates: average between participating cars' last stops and destination
     const participatingStops = finalWaypoints.filter(w =>
-      w.carNames.some(cn => mp.carLabels.includes(cn))
+      w.carNames.some(cn => mp.allCarLabels.includes(cn))
     )
     const avgLat = participatingStops.length > 0
       ? participatingStops.reduce((s, w) => s + w.lat, 0) / participatingStops.length
@@ -750,16 +837,20 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
       mp.coords?.lng ??
       (Number(aiMp?.lng) || Number(((avgLng + fallbackDestCoords.lng) / 2).toFixed(4)))
 
+    const mpDescription = mp.notes
+      ? `${mp.notes} — Ritrovo per: ${mp.allCarLabels.join(', ')}`
+      : (mp.incomingMeetingPointNames.length > 0
+          ? `Ritrovo e unione convoglio da ${mp.incomingMeetingPointNames.join(', ')} con ${mp.directCarLabels.length > 0 ? mp.directCarLabels.join(', ') : 'altre auto'}`
+          : `Punto di ritrovo per: ${mp.allCarLabels.join(', ')}`)
+
     finalWaypoints.push({
       name: mp.name,
       type: 'meeting_point',
       time: formatMinutesToTime(mpMin),
-      carNames: [...mp.carLabels],
+      carNames: [...mp.allCarLabels],
       lat: mpLat,
       lng: mpLng,
-      description: mp.notes
-        ? `${mp.notes} — Ritrovo per: ${mp.carLabels.join(', ')}`
-        : `Punto di ritrovo per: ${mp.carLabels.join(', ')}`
+      description: mpDescription
     })
 
     // Add post-meeting pickups along the single merged convoy route from mp to destination
@@ -798,7 +889,7 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
           type: 'pickup',
           time: formatMinutesToTime(pickupMin),
           // All cars merged at this meeting point travel together along this single track
-          carNames: [...mp.carLabels],
+          carNames: [...mp.allCarLabels],
           lat: pickupLat,
           lng: pickupLng,
           description: `Salita a bordo: ${p.fullName} (su ${p.assignedCarLabel} — in convoglio)`

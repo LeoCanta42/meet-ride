@@ -19,6 +19,7 @@ export interface ManualMeetingPoint {
   name: string
   time?: string
   riderIds: string[]
+  meetingPointIds?: string[] // IDs of other meeting points that merge into this meeting point
   coords?: Coordinates | null
   notes?: string
 }
@@ -64,6 +65,7 @@ export interface Participant {
   departureLocation?: string
   departureCoords?: Coordinates | null
   hasDriver?: boolean // default true; if false, vehicle is hosted without a driver
+  driverParticipantId?: string | null // passenger who took the role of driver
   ownerParticipantId?: string | null // if vehicle belongs to another participant (2nd car)
   secondaryVehicle?: Partial<Participant> | null
   // Passenger specific
@@ -76,6 +78,7 @@ export interface Participant {
 export interface CarWithSeats {
   rider: Participant
   passengers: Participant[]
+  driver?: Participant | null // driver participant (either rider themselves or passenger assigned as driver)
   totalSeats: number
   occupiedSeats: number
   availableSeats: number

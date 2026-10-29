@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.140",
+    "@iconify-json/tabler": "^1.2.43",
     "@nuxt/ui": "^4.11.3",
     "@types/node": "^26.6.5",
     "@vite-pwa/nuxt": "^1.1.1",

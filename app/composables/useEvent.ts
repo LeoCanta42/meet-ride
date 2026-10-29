@@ -267,6 +267,61 @@ export function useEvent() {
     }
   }
 
+  // Assign a passenger as driver of a car (by organizer or by passenger themselves)
+  async function assignDriver(riderId: string, passengerId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      const token = myParticipant.value?.token || getLocalParticipantToken(currentEvent.value.id) || undefined
+      await $fetch(`/api/events/${currentEvent.value.id}/assign-driver`, {
+        method: 'POST',
+        body: {
+          riderId,
+          passengerId,
+          token
+        }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nell\'assegnazione dell\'autista' }
+    }
+  }
+
+  // Remove/unassign driver from a car
+  async function unassignDriver(riderId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
+
+    try {
+      const token = myParticipant.value?.token || getLocalParticipantToken(currentEvent.value.id) || undefined
+      await $fetch(`/api/events/${currentEvent.value.id}/assign-driver`, {
+        method: 'POST',
+        body: {
+          riderId,
+          action: 'unassign',
+          token
+        }
+      })
+      await loadEvent(currentEvent.value.id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.data?.statusMessage || 'Errore nella rimozione dell\'autista' }
+    }
+  }
+
+  // Current logged in passenger decides to become the driver of a car
+  async function becomeDriver(riderId: string): Promise<{ success: boolean; error?: string }> {
+    if (!currentEvent.value || !myParticipant.value) {
+      return { success: false, error: 'Devi prima registrarti all\'evento' }
+    }
+    return assignDriver(riderId, myParticipant.value.id)
+  }
+
+  // Current logged in driver steps down from driving a car
+  async function stepDownDriver(riderId: string): Promise<{ success: boolean; error?: string }> {
+    return unassignDriver(riderId)
+  }
+
   // Organizer: update event settings (including arrival time)
   async function updateEventDetails(payload: Partial<EventItem>): Promise<{ success: boolean; error?: string }> {
     if (!currentEvent.value) return { success: false, error: 'Nessun evento selezionato' }
@@ -462,6 +517,10 @@ export function useEvent() {
     updateParticipantAsOrganizer,
     deleteParticipantAsOrganizer,
     assignPassengerAsOrganizer,
+    assignDriver,
+    unassignDriver,
+    becomeDriver,
+    stepDownDriver,
     updateEventDetails,
     calculateConvoyRoute,
     reconnectParticipant,

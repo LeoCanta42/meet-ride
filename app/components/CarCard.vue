@@ -7,6 +7,7 @@ const props = defineProps<{
   myParticipant?: Participant | null
   loading?: boolean
   isOrganizer?: boolean
+  isDragging?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -18,17 +19,37 @@ const emit = defineEmits<{
   (e: 'delete-car', riderId: string): void
   (e: 'remove-passenger', passengerId: string): void
   (e: 'show-passenger', passenger: Participant, car: CarWithSeats): void
+  (e: 'become-driver', riderId: string): void
+  (e: 'step-down-driver', riderId: string): void
+  (e: 'assign-driver', riderId: string): void
+  (e: 'remove-driver', riderId: string): void
+  (e: 'drag-start', event: DragEvent, payload: { passengerId: string; passengerName: string; fromRiderId?: string | null; isDriver?: boolean }): void
+  (e: 'drop-on-car', targetRiderId: string, event: DragEvent): void
+  (e: 'drop-on-driver', targetRiderId: string, event: DragEvent): void
 }>()
 
 const { t } = useI18n()
+
+const isDragOverCar = ref(false)
+const isDragOverDriver = ref(false)
 
 const isMyCar = computed(() => {
   if (!props.myParticipant && !props.car.rider.token) return false
   return (
     props.myParticipant?.id === props.car.rider.id ||
     (Boolean(props.car.rider.ownerParticipantId) && props.car.rider.ownerParticipantId === props.myParticipant?.id) ||
-    Boolean(props.car.rider.token)
+    Boolean(props.car.rider.token && props.myParticipant?.token && props.car.rider.token === props.myParticipant.token)
   )
+})
+
+const isDriverOfThisCar = computed(() => {
+  if (!props.myParticipant) return false
+  if (props.car.driver && props.car.driver.id === props.myParticipant.id) return true
+  return Boolean(props.car.hasDriver !== false && props.car.rider.id === props.myParticipant.id)
+})
+
+const hasDriver = computed(() => {
+  return Boolean(props.car.hasDriver !== false && props.car.driver)
 })
 
 const isSeatedInThisCar = computed(() => {
@@ -46,18 +67,18 @@ const totalCarPrice = computed<number | null>(() => {
   return null
 })
 
-// Total people currently in the car = 1 driver + occupied passenger seats
+// Total people currently in the car = (1 if driver else 0) + occupied passenger seats
 const peopleInCar = computed<number>(() => {
-  return props.car.peopleCount || (1 + props.car.occupiedSeats)
+  return props.car.peopleCount || ((hasDriver.value ? 1 : 0) + props.car.occupiedSeats)
 })
 
 // Automatically calculated price per person based on how many people are currently in the car
 const currentPricePerPerson = computed<number | null>(() => {
   if (totalCarPrice.value === null) return null
-  return Math.round((totalCarPrice.value / peopleInCar.value) * 100) / 100
+  return Math.round((totalCarPrice.value / Math.max(1, peopleInCar.value)) * 100) / 100
 })
 
-// Price per person if 1 more passenger joins (helpful when car is empty or not full)
+// Price per person if 1 more passenger joins
 const nextJoinPricePerPerson = computed<number | null>(() => {
   if (totalCarPrice.value === null || props.car.isFull) return null
   return Math.round((totalCarPrice.value / (peopleInCar.value + 1)) * 100) / 100
@@ -68,9 +89,13 @@ function formatEuro(val: number | null | undefined): string {
   return Number.isInteger(val) ? `${val}` : val.toFixed(2)
 }
 
+const effectiveDriverPhone = computed(() => {
+  return props.car.driver?.phone || props.car.rider.phone || ''
+})
+
 const cleanDriverPhone = computed(() => {
-  if (!props.car.rider.phone) return ''
-  return props.car.rider.phone.replace(/[\s()-]/g, '')
+  if (!effectiveDriverPhone.value) return ''
+  return effectiveDriverPhone.value.replace(/[\s()-]/g, '')
 })
 
 const driverWaLink = computed(() => {
@@ -80,7 +105,7 @@ const driverWaLink = computed(() => {
 })
 
 const canJoinCar = computed(() => {
-  if (isMyCar.value || isSeatedInThisCar.value || props.car.isFull) return false
+  if (isMyCar.value || isDriverOfThisCar.value || isSeatedInThisCar.value || props.car.isFull) return false
   if (props.myParticipant && props.myParticipant.role === 'rider') return false
   return true
 })
@@ -97,26 +122,104 @@ function handleSeatAction() {
     emit('select-car', props.car.rider.id)
   }
 }
+
+// Drag and drop handlers
+function onDragOverCar(e: DragEvent) {
+  isDragOverCar.value = true
+}
+
+function onDragLeaveCar(e: DragEvent) {
+  const rect = (e.currentTarget as HTMLElement)?.getBoundingClientRect()
+  if (rect) {
+    if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+      isDragOverCar.value = false
+    }
+  } else {
+    isDragOverCar.value = false
+  }
+}
+
+function onDropCar(e: DragEvent) {
+  isDragOverCar.value = false
+  isDragOverDriver.value = false
+  emit('drop-on-car', props.car.rider.id, e)
+}
+
+function onDragOverDriver(e: DragEvent) {
+  isDragOverDriver.value = true
+}
+
+function onDragLeaveDriver(e: DragEvent) {
+  isDragOverDriver.value = false
+}
+
+function onDropDriver(e: DragEvent) {
+  isDragOverDriver.value = false
+  isDragOverCar.value = false
+  emit('drop-on-driver', props.car.rider.id, e)
+}
+
+function handlePassengerDragStart(e: DragEvent, p: Participant) {
+  emit('drag-start', e, {
+    passengerId: p.id,
+    passengerName: p.name,
+    fromRiderId: props.car.rider.id,
+    isDriver: false
+  })
+}
+
+function handleDriverDragStart(e: DragEvent, d: Participant) {
+  emit('drag-start', e, {
+    passengerId: d.id,
+    passengerName: d.name,
+    fromRiderId: props.car.rider.id,
+    isDriver: true
+  })
+}
+
+function canDragPassenger(p: Participant): boolean {
+  if (props.isOrganizer) return true
+  return props.myParticipant?.id === p.id
+}
+
+const canDragDriver = computed(() => {
+  if (!props.car.driver) return false
+  if (props.isOrganizer) return true
+  return isDriverOfThisCar.value
+})
 </script>
 
 <template>
   <div
-    class="surface-card relative flex flex-col justify-between overflow-hidden rounded-2xl p-4 sm:p-5 transition-all hover:shadow-md"
+    class="surface-card relative flex flex-col justify-between overflow-hidden rounded-2xl p-4 sm:p-5 transition-all"
     :class="[
       isSeatedInThisCar ? 'ring-2 ring-sky-500 bg-sky-50/20 dark:bg-sky-950/20' : '',
-      isMyCar ? 'ring-2 ring-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' : ''
+      isDriverOfThisCar ? 'ring-2 ring-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' : '',
+      isDragOverCar ? 'ring-2 ring-sky-500 border-sky-400 bg-sky-50/50 dark:bg-sky-950/40 shadow-lg scale-[1.01]' : 'hover:shadow-md'
     ]"
+    @dragover.prevent="onDragOverCar"
+    @dragleave="onDragLeaveCar"
+    @drop.prevent="onDropCar"
   >
+    <!-- Drag over overlay banner -->
+    <div
+      v-if="isDragOverCar && !isDragOverDriver"
+      class="absolute top-2 right-2 rounded-full bg-sky-600 text-white text-[11px] font-bold px-3 py-1 shadow-md z-10 flex items-center gap-1.5 animate-pulse"
+    >
+      <UIcon name="i-lucide-arrow-down-circle" class="h-3.5 w-3.5" />
+      <span>Rilascia per far salire a bordo</span>
+    </div>
+
     <!-- Top banner / tags (responsive, no overlap on narrow screens) -->
     <div class="flex flex-wrap items-start justify-between gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
       <div class="flex items-start gap-3 min-w-0 flex-1">
         <div
           class="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl font-bold"
-          :class="car.rider.hasDriver === false
+          :class="!hasDriver
             ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
             : 'bg-slate-100 dark:bg-slate-800 text-sky-600 dark:text-sky-400'"
         >
-          <UIcon :name="car.rider.hasDriver === false ? 'i-lucide-car' : 'i-lucide-car-front'" class="h-5 w-5 sm:h-6 sm:w-6" />
+          <UIcon :name="!hasDriver ? 'i-lucide-car' : 'i-lucide-car-front'" class="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-1.5">
@@ -124,16 +227,17 @@ function handleSeatAction() {
               {{ car.rider.name }}
             </h4>
             <span
-              v-if="car.rider.hasDriver === false"
+              v-if="!hasDriver"
               class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300 shrink-0 inline-flex items-center gap-1"
             >
               <UIcon name="i-lucide-alert-circle" class="h-3 w-3" />
               {{ isMyCar ? 'Messa a disposizione da te' : 'Senza autista' }}
             </span>
             <span
-              v-else-if="isMyCar"
-              class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0"
+              v-else-if="isDriverOfThisCar"
+              class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0 inline-flex items-center gap-1"
             >
+              <UIcon name="i-tabler-steering-wheel" class="h-3 w-3" />
               {{ t('car.youAreTheDriver') }}
             </span>
             <span
@@ -206,7 +310,7 @@ function handleSeatAction() {
       </div>
 
       <span
-        v-if="!isSeatedInThisCar && !isMyCar && !car.isFull && nextJoinPricePerPerson !== null"
+        v-if="!isSeatedInThisCar && !isDriverOfThisCar && !car.isFull && nextJoinPricePerPerson !== null"
         class="rounded-lg bg-white/90 px-2 py-1 text-[10px] font-semibold text-emerald-800 shadow-2xs dark:bg-slate-900/80 dark:text-emerald-300 shrink-0"
       >
         {{ t('car.splitWithNext') }}: €{{ formatEuro(nextJoinPricePerPerson) }}
@@ -225,10 +329,10 @@ function handleSeatAction() {
         </div>
       </div>
 
-      <div v-if="car.rider.phone" class="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
+      <div v-if="effectiveDriverPhone" class="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
         <UIcon name="i-lucide-phone" class="h-4 w-4 shrink-0 text-emerald-500" />
         <a :href="'tel:' + cleanDriverPhone" class="hover:underline font-mono text-[11px] text-slate-700 dark:text-slate-300 truncate">
-          {{ car.rider.phone }}
+          {{ effectiveDriverPhone }}
         </a>
         <a
           v-if="driverWaLink"
@@ -259,29 +363,117 @@ function handleSeatAction() {
 
       <!-- Passengers chips -->
       <div class="flex flex-wrap gap-1.5">
-        <!-- Driver seat badge -->
-        <component
-          :is="!myParticipant ? 'button' : 'span'"
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold max-w-full transition-all text-left"
+        <!-- Driver seat badge / Driverless alert (Drop target for driver) -->
+        <div
+          class="relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold max-w-full transition-all text-left"
           :class="[
-            car.rider.hasDriver === false
+            !hasDriver
               ? 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:border-amber-900/60'
-              : 'bg-slate-200/90 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
-            !myParticipant ? 'hover:bg-sky-100 hover:text-sky-800 cursor-pointer dark:hover:bg-sky-950 dark:hover:text-sky-300' : ''
+              : (isDriverOfThisCar
+                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:border-emerald-800 shadow-xs'
+                  : 'bg-slate-200/90 text-slate-800 dark:bg-slate-700 dark:text-slate-200'),
+            isDragOverDriver ? 'ring-2 ring-emerald-500 bg-emerald-200 dark:bg-emerald-900 scale-105 z-10' : '',
+            canDragDriver ? 'cursor-grab active:cursor-grabbing hover:shadow-xs' : ''
           ]"
-          :title="!myParticipant ? t('eventView.isThisYou') : (car.rider.hasDriver === false ? 'Auto senza autista' : t('car.driver'))"
-          @click="!myParticipant ? emit('claim-participant', car.rider.id) : null"
+          :draggable="canDragDriver"
+          @dragstart="canDragDriver && car.driver ? handleDriverDragStart($event, car.driver) : null"
+          @dragover.prevent.stop="onDragOverDriver"
+          @dragleave.stop="onDragLeaveDriver"
+          @drop.prevent.stop="onDropDriver"
+          :title="!hasDriver ? 'Vettura senza autista' : (canDragDriver ? 'Trascina per spostare autista' : t('car.driver'))"
         >
+          <!-- Drag over highlight banner on driver badge -->
+          <div
+            v-if="isDragOverDriver"
+            class="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 shadow-md flex items-center gap-1 z-30 pointer-events-none"
+          >
+            <UIcon name="i-tabler-steering-wheel" class="h-3 w-3" />
+            <span>Rilascia qui come autista</span>
+          </div>
+
           <UIcon
-            :name="car.rider.hasDriver === false ? 'i-lucide-alert-circle' : 'i-lucide-steering-wheel'"
-            class="h-3.5 w-3.5 shrink-0"
-            :class="car.rider.hasDriver === false ? 'text-amber-600' : 'text-sky-600 dark:text-sky-400'"
+            v-if="canDragDriver"
+            name="i-lucide-grip-vertical"
+            class="h-3 w-3 shrink-0 opacity-60 -ml-1 mr-0.5"
           />
+
+          <UIcon
+            :name="!hasDriver ? 'i-lucide-alert-circle' : 'i-tabler-steering-wheel'"
+            class="h-3.5 w-3.5 shrink-0"
+            :class="!hasDriver ? 'text-amber-600' : (isDriverOfThisCar ? 'text-emerald-600 dark:text-emerald-400' : 'text-sky-600 dark:text-sky-400')"
+          />
+
+          <!-- Driver name or alert text -->
           <span class="truncate">
-            {{ car.rider.hasDriver === false ? (car.rider.name + ' • Cerca autista') : car.rider.name }}
+            <template v-if="!hasDriver">
+              {{ car.rider.name ? (car.rider.name + ' • Cerca autista') : 'Cerca autista' }}
+            </template>
+            <template v-else-if="isDriverOfThisCar">
+              {{ car.driver?.name }} (Tu • Autista)
+            </template>
+            <template v-else-if="car.driver">
+              {{ car.driver.name }} (Autista)
+            </template>
+            <template v-else>
+              {{ car.rider.name }}
+            </template>
           </span>
-        </component>
+
+          <!-- If driverless: "Diventa autista" button for passenger -->
+          <button
+            v-if="!hasDriver && myParticipant?.role === 'passenger'"
+            type="button"
+            class="ml-1 inline-flex items-center gap-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 text-[10px] font-bold transition-colors cursor-pointer shadow-2xs"
+            title="Offriti come guidatore di questa vettura"
+            @click.stop="emit('become-driver', car.rider.id)"
+          >
+            <UIcon name="i-tabler-steering-wheel" class="h-3 w-3" />
+            <span>Diventa autista</span>
+          </button>
+
+          <!-- If driverless: Organizer assign button -->
+          <button
+            v-else-if="!hasDriver && isOrganizer"
+            type="button"
+            class="ml-1 inline-flex items-center gap-0.5 rounded bg-sky-600 hover:bg-sky-700 text-white px-1.5 py-0.5 text-[10px] font-bold transition-colors cursor-pointer shadow-2xs"
+            title="Assegna un autista"
+            @click.stop="emit('assign-driver', car.rider.id)"
+          >
+            <span>+ Assegna</span>
+          </button>
+
+          <!-- If driverless & visitor: claim or join as driver -->
+          <button
+            v-else-if="!hasDriver && !myParticipant"
+            type="button"
+            class="ml-1 text-[10px] underline hover:text-amber-800 cursor-pointer"
+            @click.stop="emit('claim-participant', car.rider.id)"
+          >
+            Vuoi guidare tu?
+          </button>
+
+          <!-- If current user is the assigned driver: step down button -->
+          <button
+            v-else-if="isDriverOfThisCar && car.rider.driverParticipantId"
+            type="button"
+            class="ml-1 text-[10px] text-red-600 hover:underline cursor-pointer font-bold"
+            title="Rinuncia al ruolo di guidatore"
+            @click.stop="emit('step-down-driver', car.rider.id)"
+          >
+            (Lascia)
+          </button>
+
+          <!-- If organizer and car has an assigned driver: remove driver button -->
+          <button
+            v-else-if="isOrganizer && car.rider.driverParticipantId"
+            type="button"
+            class="ml-1 text-slate-400 hover:text-red-500 cursor-pointer p-0.5"
+            title="Rimuovi autista da questa vettura"
+            @click.stop="emit('remove-driver', car.rider.id)"
+          >
+            <UIcon name="i-lucide-x" class="h-3 w-3" />
+          </button>
+        </div>
 
         <!-- Seated passengers -->
         <div
@@ -291,15 +483,23 @@ function handleSeatAction() {
           :class="[
             passenger.id === myParticipant?.id
               ? 'bg-sky-600 text-white font-semibold shadow-sm'
-              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+            canDragPassenger(passenger) ? 'cursor-grab active:cursor-grabbing hover:shadow-xs' : ''
           ]"
+          :draggable="canDragPassenger(passenger)"
+          @dragstart="canDragPassenger(passenger) ? handlePassengerDragStart($event, passenger) : null"
         >
           <button
             type="button"
             class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium max-w-full truncate hover:opacity-85 cursor-pointer rounded-l-lg transition-all"
-            :title="'Visualizza dettagli di ' + passenger.name"
+            :title="'Visualizza dettagli di ' + passenger.name + (canDragPassenger(passenger) ? ' (Trascina per spostare)' : '')"
             @click="emit('show-passenger', passenger, car)"
           >
+            <UIcon
+              v-if="canDragPassenger(passenger)"
+              name="i-lucide-grip-vertical"
+              class="h-3 w-3 shrink-0 opacity-60 -ml-1 mr-0.5"
+            />
             <UIcon
               name="i-lucide-user"
               class="h-3.5 w-3.5 shrink-0"
@@ -339,25 +539,54 @@ function handleSeatAction() {
 
     <!-- Actions -->
     <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-      <!-- If current user is the driver/owner -->
-      <div v-if="isMyCar" class="text-center text-xs text-slate-500 py-1 font-medium">
+      <!-- If current user is the driver -->
+      <div v-if="isDriverOfThisCar" class="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-xs">
+        <span class="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1 truncate">
+          <UIcon name="i-tabler-steering-wheel" class="h-4 w-4 shrink-0 text-emerald-600" />
+          <span>{{ t('car.youAreTheDriver') }}</span>
+        </span>
+        <button
+          v-if="car.rider.driverParticipantId"
+          type="button"
+          class="text-[11px] font-bold text-red-600 hover:underline shrink-0 cursor-pointer"
+          @click="emit('step-down-driver', car.rider.id)"
+        >
+          Lascia ruolo
+        </button>
+      </div>
+
+      <!-- If current user is the car host/owner but not driving -->
+      <div v-else-if="isMyCar" class="text-center text-xs text-slate-500 py-1 font-medium">
         {{ car.rider.hasDriver === false ? 'Hai messo a disposizione questa vettura' : t('car.youAreTheDriver') }}
       </div>
 
-      <!-- If current user is already in this car -->
-      <UButton
-        v-else-if="isSeatedInThisCar"
-        color="error"
-        variant="subtle"
-        block
-        size="sm"
-        :loading="loading"
-        @click="handleSeatAction"
-        class="font-semibold text-xs"
-      >
-        <UIcon name="i-lucide-log-out" class="h-4 w-4 mr-1" />
-        {{ t('car.leaveCarBtn') }}
-      </UButton>
+      <!-- If current user is already in this car as passenger -->
+      <div v-else-if="isSeatedInThisCar" class="space-y-2">
+        <UButton
+          color="error"
+          variant="subtle"
+          block
+          size="sm"
+          :loading="loading"
+          @click="handleSeatAction"
+          class="font-semibold text-xs"
+        >
+          <UIcon name="i-lucide-log-out" class="h-4 w-4 mr-1" />
+          {{ t('car.leaveCarBtn') }}
+        </UButton>
+        <UButton
+          v-if="!hasDriver"
+          color="primary"
+          variant="outline"
+          block
+          size="sm"
+          @click="emit('become-driver', car.rider.id)"
+          class="font-semibold text-xs"
+        >
+          <UIcon name="i-tabler-steering-wheel" class="h-4 w-4 mr-1" />
+          Guida tu quest'auto
+        </UButton>
+      </div>
 
       <!-- If current user is already driving another car -->
       <div
@@ -368,32 +597,55 @@ function handleSeatAction() {
       </div>
 
       <!-- If car is full and user is not in this car -->
-      <UButton
-        v-else-if="car.isFull"
-        color="neutral"
-        variant="ghost"
-        disabled
-        block
-        size="sm"
-        class="text-xs font-medium"
-      >
-        {{ t('car.seatsFull') }}
-      </UButton>
+      <div v-else-if="car.isFull" class="space-y-2">
+        <UButton
+          color="neutral"
+          variant="ghost"
+          disabled
+          block
+          size="sm"
+          class="text-xs font-medium"
+        >
+          {{ t('car.seatsFull') }}
+        </UButton>
+        <UButton
+          v-if="!hasDriver && myParticipant?.role === 'passenger'"
+          color="primary"
+          variant="outline"
+          block
+          size="sm"
+          @click="emit('become-driver', car.rider.id)"
+          class="font-semibold text-xs"
+        >
+          <UIcon name="i-tabler-steering-wheel" class="h-4 w-4 mr-1" />
+          Diventa il guidatore
+        </UButton>
+      </div>
 
       <!-- User can join this car -->
-      <UButton
-        v-else
-        color="primary"
-        variant="solid"
-        block
-        size="sm"
-        :loading="loading"
-        @click="handleSeatAction"
-        class="font-semibold text-xs shadow-sm shadow-sky-500/20"
-      >
-        <UIcon name="i-lucide-car" class="h-4 w-4 mr-1" />
-        {{ t('car.joinCarBtn') }}
-      </UButton>
+      <div v-else class="space-y-1.5">
+        <UButton
+          color="primary"
+          variant="solid"
+          block
+          size="sm"
+          :loading="loading"
+          @click="handleSeatAction"
+          class="font-semibold text-xs shadow-sm shadow-sky-500/20"
+        >
+          <UIcon name="i-lucide-car" class="h-4 w-4 mr-1" />
+          {{ t('car.joinCarBtn') }}
+        </UButton>
+        <button
+          v-if="!hasDriver && myParticipant?.role === 'passenger'"
+          type="button"
+          @click="emit('become-driver', car.rider.id)"
+          class="w-full text-center text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline py-0.5 inline-flex items-center justify-center gap-1 cursor-pointer"
+        >
+          <UIcon name="i-tabler-steering-wheel" class="h-3.5 w-3.5" />
+          <span>Oppure: diventa l'autista di quest'auto</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>

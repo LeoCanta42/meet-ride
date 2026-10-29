@@ -28,7 +28,8 @@ function packTokenWithMeta(
   price?: number | null,
   hasDriver?: boolean,
   ownerId?: string | null,
-  totalSeats?: number
+  totalSeats?: number,
+  driverId?: string | null
 ): string {
   const baseToken = (token || '').split('|')[0] || crypto.randomBytes(16).toString('hex')
   const parts = [baseToken]
@@ -45,6 +46,9 @@ function packTokenWithMeta(
   if (totalSeats !== undefined && totalSeats !== null && !Number.isNaN(Number(totalSeats))) {
     parts.push(`seats:${Number(totalSeats)}`)
   }
+  if (driverId) {
+    parts.push(`driverId:${encodeURIComponent(driverId)}`)
+  }
   return parts.join('|')
 }
 
@@ -55,6 +59,7 @@ function unpackTokenMeta(rawToken?: string | null): {
   hasDriver?: boolean
   ownerId?: string | null
   totalSeats?: number
+  driverId?: string | null
 } {
   if (!rawToken) return { token: '' }
   const segments = rawToken.split('|')
@@ -64,6 +69,7 @@ function unpackTokenMeta(rawToken?: string | null): {
   let hasDriver: boolean | undefined
   let ownerId: string | null | undefined
   let totalSeats: number | undefined
+  let driverId: string | null | undefined
 
   for (let i = 1; i < segments.length; i++) {
     const seg = segments[i] || ''
@@ -79,9 +85,11 @@ function unpackTokenMeta(rawToken?: string | null): {
     } else if (seg.startsWith('seats:')) {
       const val = parseInt(seg.slice(6), 10)
       if (!Number.isNaN(val) && val >= 1) totalSeats = val
+    } else if (seg.startsWith('driverId:')) {
+      driverId = decodeURIComponent(seg.slice(9))
     }
   }
-  return { token, pin, price, hasDriver, ownerId, totalSeats }
+  return { token, pin, price, hasDriver, ownerId, totalSeats, driverId }
 }
 
 function packEventDescription(
@@ -217,6 +225,7 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
             ? Boolean(p.has_driver)
             : (unpacked.hasDriver !== undefined ? unpacked.hasDriver : true)
           const resolvedOwnerId = p.owner_participant_id || unpacked.ownerId || null
+          const resolvedDriverId = (p as any).driver_participant_id || unpacked.driverId || null
           const rawSeats = Number(p.total_seats ?? p.totalSeats ?? unpacked.totalSeats)
           const resolvedSeats = !Number.isNaN(rawSeats) && rawSeats >= 1 ? rawSeats : 4
 
@@ -237,6 +246,7 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
             departureLocation: p.departure_location || undefined,
             departureCoords: p.departure_lat && p.departure_lng ? { lat: p.departure_lat, lng: p.departure_lng } : null,
             hasDriver: resolvedHasDriver,
+            driverParticipantId: resolvedDriverId,
             ownerParticipantId: resolvedOwnerId,
             assignedRiderId: p.assigned_rider_id || null,
             token: unpacked.token || p.token,
@@ -430,16 +440,17 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
             departure_lat: p.departureCoords?.lat || null,
             departure_lng: p.departureCoords?.lng || null,
             has_driver: p.hasDriver !== false,
+            driver_participant_id: p.driverParticipantId || null,
             owner_participant_id: p.ownerParticipantId || null,
             assigned_rider_id: p.assignedRiderId || null,
-            token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats),
+            token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats, p.driverParticipantId),
             created_at: p.createdAt
           }))
 
           tasks.push(
             (async () => {
               try {
-                const { error: partError } = await supabase.from('participants').upsert(fullPartRows, { onConflict: 'id' })
+                const { error: partError } = await supabase.from('participants').upsert(fullPartRows as any, { onConflict: 'id' })
                 if (partError) {
                   const basePartRows = data.participants.map(p => ({
                     id: p.id,
@@ -458,7 +469,7 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
                     departure_lat: p.departureCoords?.lat || null,
                     departure_lng: p.departureCoords?.lng || null,
                     assigned_rider_id: p.assignedRiderId || null,
-                    token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats),
+                    token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats, p.driverParticipantId),
                     created_at: p.createdAt
                   }))
                   await supabase.from('participants').upsert(basePartRows as any, { onConflict: 'id' })

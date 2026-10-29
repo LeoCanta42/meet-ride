@@ -4,7 +4,7 @@ import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
 export default defineEventHandler(async (event) => {
   const eventId = getRouterParam(event, 'id')
   const body = await readBody(event)
-  const { passengerId, token, riderId } = body || {}
+  const { passengerId, token, riderId, asDriver } = body || {}
 
   if (!eventId) {
     throw createError({ statusCode: 400, statusMessage: 'ID evento mancante' })
@@ -45,6 +45,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Solo i passeggeri possono selezionare un guidatore' })
   }
 
+  // If this passenger was currently designated driver of any car, clear that assignment
+  const previouslyDrivenCar = db.participants.find(
+    p => p.eventId === foundEvent.id && p.role === 'rider' && p.driverParticipantId === passenger.id
+  )
+  if (previouslyDrivenCar && (previouslyDrivenCar.id !== riderId || !asDriver)) {
+    previouslyDrivenCar.driverParticipantId = null
+    previouslyDrivenCar.hasDriver = false
+  }
+
   // If riderId is null, passenger wants to leave current car
   if (!riderId) {
     passenger.assignedRiderId = null
@@ -59,8 +68,26 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Auto o guidatore non trovato' })
   }
 
-  // Check capacity
-  const currentPassengers = db.participants.filter(p => p.eventId === foundEvent.id && p.assignedRiderId === rider.id)
+  // If requested to assign as driver
+  if (asDriver) {
+    if (rider.driverParticipantId && rider.driverParticipantId !== passenger.id) {
+      const oldDriver = db.participants.find(p => p.id === rider.driverParticipantId && p.eventId === foundEvent.id)
+      if (oldDriver) {
+        oldDriver.assignedRiderId = null
+      }
+    }
+    rider.driverParticipantId = passenger.id
+    rider.hasDriver = true
+    passenger.assignedRiderId = rider.id
+    foundEvent.routePlan = null
+    await saveDb(db)
+    return { success: true, assignedRiderId: rider.id, asDriver: true }
+  }
+
+  // Check capacity (excluding driver seat)
+  const currentPassengers = db.participants.filter(
+    p => p.eventId === foundEvent.id && p.assignedRiderId === rider.id && (!rider.driverParticipantId || p.id !== rider.driverParticipantId)
+  )
   const totalSeats = rider.totalSeats || 4
 
   if (passenger.assignedRiderId !== rider.id && currentPassengers.length >= totalSeats) {

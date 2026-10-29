@@ -42,18 +42,29 @@ export default defineEventHandler(async (event) => {
         const cleanName = String(mp?.name || '').trim()
         const prevMp = (existingEvent.meetingPoints || []).find(prev => prev.id === mp?.id)
         const nameChanged = !prevMp || prevMp.name.trim().toLowerCase() !== cleanName.toLowerCase()
+        const mpId = String(mp?.id || crypto.randomUUID())
         return {
-          id: String(mp?.id || crypto.randomUUID()),
+          id: mpId,
           name: cleanName,
           time: mp?.time ? String(mp.time).trim() : undefined,
           riderIds: Array.isArray(mp?.riderIds)
             ? Array.from(new Set(mp.riderIds.map(String).filter((rid: string) => validRiderIds.has(rid))))
             : [],
+          meetingPointIds: Array.isArray(mp?.meetingPointIds)
+            ? Array.from(new Set(mp.meetingPointIds.map(String).filter((mid: string) => mid && mid !== mpId)))
+            : [],
           coords: mp?.coords !== undefined ? mp.coords : (nameChanged ? null : prevMp?.coords || null),
           notes: mp?.notes ? String(mp.notes).trim() : undefined
         }
       })
-      .filter(mp => mp.name && mp.riderIds.length >= 2)
+      .filter(mp => mp.name && (mp.riderIds.length + (mp.meetingPointIds?.length || 0)) >= 2)
+
+    // Ensure meetingPointIds only reference valid meeting points in updatedMeetingPoints
+    const allMpIds = new Set(updatedMeetingPoints.map(m => m.id))
+    updatedMeetingPoints = updatedMeetingPoints.map(mp => ({
+      ...mp,
+      meetingPointIds: (mp.meetingPointIds || []).filter(mid => allMpIds.has(mid))
+    })).filter(mp => (mp.riderIds.length + (mp.meetingPointIds?.length || 0)) >= 2)
   }
 
   const updated = {

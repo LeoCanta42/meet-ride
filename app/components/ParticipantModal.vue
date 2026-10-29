@@ -289,7 +289,7 @@ function handleSubmit() {
                 :class="hasDriver ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'"
                 @click="hasDriver = true"
               >
-                <UIcon name="i-lucide-steering-wheel" class="h-4 w-4 text-emerald-600 shrink-0" />
+                <UIcon name="i-tabler-steering-wheel" class="h-4 w-4 text-emerald-600 shrink-0" />
                 <span>{{ t('participantModal.hasDriverYes') }}</span>
               </button>
               <button
