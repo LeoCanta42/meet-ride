@@ -2,12 +2,10 @@
 import { useI18n, type Locale } from '~/composables/useI18n'
 import { useOrganizerAuth } from '~/composables/useOrganizerAuth'
 import { useAppearance } from '~/composables/useAppearance'
-import { usePwa } from '~/composables/usePwa'
 
 const { t, locale, setLocale } = useI18n()
 const { user, logout } = useOrganizerAuth()
 const { isDark, toggleTheme } = useAppearance()
-const { isInstalled, triggerInstall } = usePwa()
 
 function toggleLanguage() {
   const next: Locale = locale.value === 'it' ? 'en' : 'it'
@@ -28,7 +26,7 @@ async function handleLogout() {
         <img
           src="/icons/icon-192.png"
           alt="Meet & Ride"
-          class="h-9 w-9 sm:h-10 sm:w-10 rounded-xl shadow-sm group-hover:scale-105 transition-transform"
+          class="h-8 w-8 sm:h-10 sm:w-10 rounded-xl shadow-sm group-hover:scale-105 transition-transform"
         />
         <div class="flex items-center">
           <span class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -59,7 +57,7 @@ async function handleLogout() {
         </NuxtLink>
 
         <NuxtLink
-          v-if="user"
+          v-if="user && (user.isAdmin || user.isApproved)"
           to="/events/new"
           class="text-slate-600 hover:text-sky-600 transition-colors dark:text-slate-300 dark:hover:text-sky-400"
         >
@@ -68,21 +66,7 @@ async function handleLogout() {
       </nav>
 
       <!-- Actions & Controls -->
-      <div class="flex items-center gap-1 sm:gap-2 shrink-0">
-        <!-- Download / Install App Button -->
-        <UButton
-          v-if="!isInstalled"
-          color="primary"
-          variant="subtle"
-          size="xs"
-          class="rounded-lg text-xs font-semibold px-2 sm:px-2.5 py-1.5"
-          :title="t('pwa.downloadBtn')"
-          @click="triggerInstall"
-        >
-          <UIcon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0" />
-          <span class="hidden sm:inline ml-1">{{ t('pwa.downloadBtn') }}</span>
-        </UButton>
-
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <!-- Language Switcher -->
         <UButton
           color="neutral"
@@ -112,15 +96,27 @@ async function handleLogout() {
 
         <!-- User Authentication State -->
         <template v-if="user">
-          <NuxtLink to="/events/new" class="md:hidden">
+          <NuxtLink to="/#my-events" class="md:hidden">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              class="rounded-lg px-2 py-1.5"
+              :title="t('nav.myEvents')"
+            >
+              <UIcon name="i-lucide-calendar" class="h-4 w-4 text-sky-600 dark:text-sky-400" />
+            </UButton>
+          </NuxtLink>
+
+          <NuxtLink v-if="user.isAdmin || user.isApproved" to="/events/new" class="md:hidden">
             <UButton
               color="primary"
-              variant="ghost"
+              variant="subtle"
               size="xs"
               class="rounded-lg px-2 py-1.5"
               :title="t('nav.newEvent')"
             >
-              <UIcon name="i-lucide-calendar-plus" class="h-4 w-4" />
+              <UIcon name="i-lucide-plus" class="h-4 w-4" />
             </UButton>
           </NuxtLink>
 
@@ -128,7 +124,7 @@ async function handleLogout() {
             <div class="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-[11px] font-bold text-sky-700 dark:bg-sky-900/60 dark:text-sky-300">
               {{ user.name.slice(0, 2).toUpperCase() }}
             </div>
-            <span class="text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
+            <span class="text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[110px] truncate">
               {{ user.name }}
             </span>
           </div>

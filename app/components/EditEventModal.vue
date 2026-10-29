@@ -142,21 +142,22 @@ async function handleSubmit() {
           />
         </div>
 
-        <!-- Destination, Date & Arrival Time -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="sm:col-span-1">
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {{ t('events.destination') }} *
-            </label>
-            <UInput
-              v-model="destination"
-              :placeholder="t('events.destinationPlaceholder')"
-              icon="i-lucide-map-pin"
-              required
-              class="w-full"
-            />
-          </div>
+        <!-- Destination -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            {{ t('events.destination') }} *
+          </label>
+          <UInput
+            v-model="destination"
+            :placeholder="t('events.destinationPlaceholder')"
+            icon="i-lucide-map-pin"
+            required
+            class="w-full"
+          />
+        </div>
 
+        <!-- Date & Arrival Time -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('events.date') }} *
@@ -176,7 +177,8 @@ async function handleSubmit() {
             </label>
             <UInput
               v-model="arrivalTime"
-              placeholder="es. 20:30"
+              type="time"
+              placeholder="20:30"
               icon="i-lucide-clock"
               class="w-full font-mono font-medium"
             />

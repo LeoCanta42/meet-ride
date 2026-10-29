@@ -39,17 +39,38 @@ export default defineEventHandler(async (event) => {
 
   const plan = await calculateConvoyRouteWithGemini(foundEvent, riders, passengers)
 
-  // Autonomously apply seat assignments to passengers in database
+  // Autonomously apply seat assignments to passengers in database while strictly enforcing car seat limits
+  const carSeatUsage = new Map<string, number>()
+  const validAssignments = []
+  const overflowUnassigned = [...(plan.unassignedPassengers || [])]
+
   if (Array.isArray(plan.passengerAssignments)) {
     for (const assignment of plan.passengerAssignments) {
       if (assignment.passengerId && assignment.assignedRiderId) {
         const p = db.participants.find(part => part.id === assignment.passengerId && part.eventId === foundEvent.id)
         const r = db.participants.find(part => part.id === assignment.assignedRiderId && part.eventId === foundEvent.id && part.role === 'rider')
         if (p && r) {
-          p.assignedRiderId = r.id
+          const used = carSeatUsage.get(r.id) || 0
+          const maxSeats = r.totalSeats || 4
+          if (used < maxSeats) {
+            carSeatUsage.set(r.id, used + 1)
+            p.assignedRiderId = r.id
+            validAssignments.push(assignment)
+          } else {
+            p.assignedRiderId = null
+            if (!overflowUnassigned.some(u => u.passengerId === p.id)) {
+              overflowUnassigned.push({
+                passengerId: p.id,
+                passengerName: p.name,
+                reason: 'Capienza massima vettura raggiunta'
+              })
+            }
+          }
         }
       }
     }
+    plan.passengerAssignments = validAssignments
+    plan.unassignedPassengers = overflowUnassigned
   }
 
   // Handle passengers that AI flagged as unassigned

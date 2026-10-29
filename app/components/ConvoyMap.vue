@@ -574,17 +574,17 @@ function saveArrivalTime() {
           </button>
         </div>
 
-        <!-- Organizer AI Calculation Button -->
+        <!-- Organizer AI Calculation Button (shown in header when a plan already exists to recalculate) -->
         <UButton
-          v-if="isOrganizer"
+          v-if="isOrganizer && activePlan"
           color="primary"
           size="sm"
           :loading="loading"
           @click="emit('calculate')"
           class="font-semibold text-xs shadow-sm cursor-pointer"
         >
-          <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1.5" />
-          <span>{{ activePlan ? 'Ricalcola Itinerario & Posti con AI' : 'Calcola Itinerario & Assegna Posti con AI' }}</span>
+          <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1.5 shrink-0" />
+          <span>Ricalcola Itinerario & Posti con AI</span>
         </UButton>
       </div>
     </div>
@@ -694,25 +694,25 @@ function saveArrivalTime() {
     </div>
 
     <!-- Map container -->
-    <div class="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-inner">
+    <div class="relative isolate overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-inner">
       <div
         ref="mapContainer"
-        class="h-64 sm:h-80 w-full z-0 bg-slate-100 dark:bg-slate-900"
+        class="min-h-[18rem] h-72 sm:h-80 w-full z-0 bg-slate-100 dark:bg-slate-900"
       />
 
       <!-- Empty state banner if no route calculated yet -->
       <div
         v-if="!activePlan"
-        class="absolute inset-0 bg-white/85 dark:bg-slate-950/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center z-10"
+        class="absolute inset-0 bg-white/85 dark:bg-slate-950/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 sm:p-6 text-center z-10"
       >
-        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400 mb-3 shadow-sm">
-          <UIcon name="i-lucide-navigation" class="h-6 w-6" />
+        <div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 dark:bg-sky-950 dark:text-sky-400 mb-2.5 sm:mb-3 shadow-sm shrink-0">
+          <UIcon name="i-lucide-navigation" class="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
-        <h4 class="text-sm font-extrabold text-slate-900 dark:text-white">
+        <h4 class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
           Itinerario e assegnazione posti non ancora generati
         </h4>
-        <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1 leading-relaxed">
-          In base alle posizioni di guidatori e passeggeri, Gemini AI assegnerà autonomamente i passeggeri alle auto per ottimizzare il tragitto, troverà i punti di ritrovo intermedi per viaggiare in convoglio e calcolerà i tempi per arrivare a destinazione alle {{ event.arrivalTime || '20:30' }}.
+        <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1 leading-relaxed">
+          In base alle posizioni di guidatori e passeggeri, Gemini AI assegnerà i posti auto per ottimizzare il tragitto e calcolerà i punti di ritrovo per arrivare a destinazione alle {{ event.arrivalTime || '20:30' }}.
         </p>
 
         <UButton
@@ -721,10 +721,10 @@ function saveArrivalTime() {
           size="md"
           :loading="loading"
           @click="emit('calculate')"
-          class="mt-4 font-semibold text-xs shadow-md shadow-sky-500/20 cursor-pointer"
+          class="mt-3 sm:mt-4 font-semibold text-xs shadow-md shadow-sky-500/20 cursor-pointer"
         >
-          <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1.5" />
-          Calcola Itinerario & Assegna Posti con Gemini AI
+          <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1.5 shrink-0" />
+          <span>Calcola Itinerario & Assegna Posti con AI</span>
         </UButton>
         <span v-else class="text-[11px] text-slate-400 mt-2 font-medium">
           L'organizzatore dell'evento genererà l'itinerario a breve.
@@ -748,7 +748,8 @@ function saveArrivalTime() {
             </label>
             <UInput
               v-model="newArrivalTime"
-              placeholder="es. 20:30 o 21:00"
+              type="time"
+              placeholder="20:30"
               icon="i-lucide-clock"
               class="w-full font-mono text-sm"
               autofocus

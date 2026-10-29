@@ -68,6 +68,23 @@ function formatEuro(val: number | null | undefined): string {
   return Number.isInteger(val) ? `${val}` : val.toFixed(2)
 }
 
+const cleanDriverPhone = computed(() => {
+  if (!props.car.rider.phone) return ''
+  return props.car.rider.phone.replace(/[\s()-]/g, '')
+})
+
+const driverWaLink = computed(() => {
+  if (!cleanDriverPhone.value) return ''
+  const digits = cleanDriverPhone.value.replace(/\+/g, '')
+  return `https://wa.me/${digits}`
+})
+
+const canJoinCar = computed(() => {
+  if (isMyCar.value || isSeatedInThisCar.value || props.car.isFull) return false
+  if (props.myParticipant && props.myParticipant.role === 'rider') return false
+  return true
+})
+
 function handleSeatAction() {
   if (!props.myParticipant) {
     emit('prompt-join', props.car.rider.id)
@@ -76,7 +93,7 @@ function handleSeatAction() {
 
   if (isSeatedInThisCar.value) {
     emit('leave-car')
-  } else {
+  } else if (props.myParticipant.role === 'passenger') {
     emit('select-car', props.car.rider.id)
   }
 }
@@ -218,11 +235,28 @@ function handleSeatAction() {
         </div>
       </div>
 
-      <div v-if="car.rider.phone" class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+      <div v-if="car.rider.phone" class="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
         <UIcon name="i-lucide-phone" class="h-4 w-4 shrink-0 text-emerald-500" />
-        <a :href="'tel:' + car.rider.phone" class="hover:underline font-mono text-[11px] text-slate-700 dark:text-slate-300 truncate">
+        <a :href="'tel:' + cleanDriverPhone" class="hover:underline font-mono text-[11px] text-slate-700 dark:text-slate-300 truncate">
           {{ car.rider.phone }}
         </a>
+        <a
+          v-if="driverWaLink"
+          :href="driverWaLink"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 transition-colors"
+        >
+          <UIcon name="i-lucide-message-circle" class="h-3 w-3 text-emerald-600" />
+          <span>WhatsApp</span>
+        </a>
+      </div>
+
+      <div v-if="car.rider.notes" class="flex items-start gap-2 text-slate-500 dark:text-slate-400 pt-0.5">
+        <UIcon name="i-lucide-message-square" class="h-3.5 w-3.5 shrink-0 text-slate-400 mt-0.5" />
+        <p class="text-[11px] italic break-words leading-snug">
+          "{{ car.rider.notes }}"
+        </p>
       </div>
     </div>
 
@@ -297,14 +331,19 @@ function handleSeatAction() {
         </div>
 
         <!-- Empty seats -->
-        <span
+        <component
+          :is="canJoinCar ? 'button' : 'span'"
           v-for="n in car.availableSeats"
           :key="'empty-' + n"
-          class="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400 dark:border-slate-700 dark:text-slate-500"
+          type="button"
+          class="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-400 dark:border-slate-700 dark:text-slate-500 transition-colors"
+          :class="canJoinCar ? 'hover:border-sky-400 hover:text-sky-600 hover:bg-sky-50/50 dark:hover:border-sky-700 dark:hover:text-sky-400 dark:hover:bg-sky-950/30 cursor-pointer' : ''"
+          :title="canJoinCar ? t('car.joinCarBtn') : undefined"
+          @click="canJoinCar ? handleSeatAction() : null"
         >
           <UIcon name="i-lucide-plus" class="h-3 w-3 shrink-0" />
-          <span>{{ t('car.seats').split(' ')[0] }}</span>
-        </span>
+          <span>{{ t('car.freeSeat') }}</span>
+        </component>
       </div>
     </div>
 
@@ -329,6 +368,14 @@ function handleSeatAction() {
         <UIcon name="i-lucide-log-out" class="h-4 w-4 mr-1" />
         {{ t('car.leaveCarBtn') }}
       </UButton>
+
+      <!-- If current user is already driving another car -->
+      <div
+        v-else-if="myParticipant && myParticipant.role === 'rider'"
+        class="text-center text-xs text-slate-400 dark:text-slate-500 py-1 font-medium"
+      >
+        {{ t('car.youAreDrivingAnother') }}
+      </div>
 
       <!-- If car is full and user is not in this car -->
       <UButton

@@ -193,27 +193,32 @@ function formatDate(dateStr: string) {
       </p>
 
       <!-- Quick Action Buttons -->
-      <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
-        <NuxtLink :to="user ? '/events/new' : '/login'">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 pt-2 max-w-sm sm:max-w-none mx-auto">
+        <NuxtLink
+          :to="!user ? '/login' : (user.isAdmin || user.isApproved ? '/events/new' : '#my-events')"
+          class="w-full sm:w-auto"
+        >
           <UButton
             color="primary"
             size="lg"
-            class="font-bold shadow-lg shadow-sky-500/25 px-6 rounded-xl"
+            block
+            class="font-bold shadow-lg shadow-sky-500/25 px-6 rounded-xl justify-center"
           >
-            <UIcon name="i-lucide-calendar-plus" class="h-5 w-5 mr-1" />
+            <UIcon name="i-lucide-calendar-plus" class="h-5 w-5 mr-1 shrink-0" />
             {{ t('hero.createEventBtn') }}
           </UButton>
         </NuxtLink>
 
-        <NuxtLink to="/events/courmayeur-weekend">
+        <NuxtLink v-if="user" to="#my-events" class="w-full sm:w-auto">
           <UButton
             color="neutral"
             variant="outline"
             size="lg"
-            class="font-semibold rounded-xl"
+            block
+            class="font-semibold rounded-xl justify-center"
           >
-            <UIcon name="i-lucide-sparkles" class="h-4 w-4 mr-1 text-sky-500" />
-            <span>Guarda Evento Demo</span>
+            <UIcon name="i-lucide-calendar" class="h-4 w-4 mr-1 text-sky-500 shrink-0" />
+            <span>{{ t('nav.myEvents') }}</span>
           </UButton>
         </NuxtLink>
       </div>
@@ -276,43 +281,43 @@ function formatDate(dateStr: string) {
 
       <!-- Admin Top Tabs Navigation -->
       <div v-if="user.isAdmin || user.role === 'admin'" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/80 dark:border-slate-800">
-        <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-800 self-start">
+        <div class="grid grid-cols-2 sm:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-800 w-full sm:w-auto">
           <button
             type="button"
-            class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0"
             :class="activeDashboardTab === 'events' ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
             @click="activeDashboardTab = 'events'"
           >
-            <UIcon name="i-lucide-calendar" class="h-4 w-4" />
-            <span>Gestione Eventi</span>
-            <span class="text-[10px] rounded-full bg-slate-200 dark:bg-slate-700 px-1.5 py-0.2">
+            <UIcon name="i-lucide-calendar" class="h-4 w-4 shrink-0" />
+            <span class="truncate">Gestione Eventi</span>
+            <span class="text-[10px] rounded-full bg-slate-200 dark:bg-slate-700 px-1.5 py-0.2 shrink-0">
               {{ myEvents.length }}
             </span>
           </button>
 
           <button
             type="button"
-            class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0"
             :class="activeDashboardTab === 'users' ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
             @click="activeDashboardTab = 'users'"
           >
-            <UIcon name="i-lucide-users" class="h-4 w-4" />
-            <span>Gestione Utenti</span>
+            <UIcon name="i-lucide-users" class="h-4 w-4 shrink-0" />
+            <span class="truncate">Gestione Utenti</span>
             <span
               v-if="pendingUsersCount > 0"
-              class="rounded-full bg-amber-500 text-white font-extrabold text-[10px] px-1.5 py-0.2 animate-pulse"
+              class="rounded-full bg-amber-500 text-white font-extrabold text-[10px] px-1.5 py-0.2 animate-pulse shrink-0"
               title="Utenti in attesa di approvazione"
             >
-              {{ pendingUsersCount }} in attesa
+              {{ pendingUsersCount }}
             </span>
-            <span v-else class="text-[10px] rounded-full bg-slate-200 dark:bg-slate-700 px-1.5 py-0.2">
+            <span v-else class="text-[10px] rounded-full bg-slate-200 dark:bg-slate-700 px-1.5 py-0.2 shrink-0">
               {{ adminUsers.length }}
             </span>
           </button>
         </div>
 
         <!-- Admin events scope filter -->
-        <div v-if="activeDashboardTab === 'events'" class="flex items-center gap-2">
+        <div v-if="activeDashboardTab === 'events'" class="flex items-center justify-between sm:justify-start gap-2">
           <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Mostra:</span>
           <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl text-xs font-semibold">
             <button
@@ -337,7 +342,7 @@ function formatDate(dateStr: string) {
 
       <!-- TAB 1: EVENTS SECTION -->
       <div v-if="activeDashboardTab === 'events'" class="space-y-6">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 class="text-xl font-bold text-slate-900 dark:text-white">
               {{ user.isAdmin || user.role === 'admin' ? (eventsScope === 'all' ? 'Tutti gli Eventi della Piattaforma' : 'I Miei Eventi') : t('dashboard.title') }}
@@ -347,7 +352,7 @@ function formatDate(dateStr: string) {
             </p>
           </div>
 
-          <NuxtLink v-if="user.isAdmin || user.isApproved" to="/events/new">
+          <NuxtLink v-if="user.isAdmin || user.isApproved" to="/events/new" class="self-start sm:self-auto shrink-0">
             <UButton color="primary" size="sm" class="font-semibold text-xs shadow-sm cursor-pointer">
               <UIcon name="i-lucide-plus" class="h-4 w-4 mr-1" />
               {{ t('dashboard.createNew') }}
@@ -432,7 +437,7 @@ function formatDate(dateStr: string) {
 
             <!-- Actions -->
             <div class="flex items-center justify-between pt-4 mt-3 border-t border-slate-100 dark:border-slate-800">
-              <NuxtLink :to="`/events/${ev.id}`">
+              <NuxtLink :to="`/events/${ev.slug || ev.id}`">
                 <UButton color="primary" variant="subtle" size="sm" class="text-xs font-semibold cursor-pointer">
                   {{ t('events.openPublicLink') }}
                   <UIcon name="i-lucide-arrow-right" class="h-3.5 w-3.5 ml-1" />
@@ -603,7 +608,7 @@ function formatDate(dateStr: string) {
               </div>
 
               <!-- Meta info -->
-              <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 pt-1">
                 <span>Registrato il: <strong>{{ formatDate(u.createdAt) }}</strong></span>
                 <span>Eventi creati: <strong>{{ u.eventsCount }}</strong></span>
               </div>

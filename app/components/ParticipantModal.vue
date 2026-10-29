@@ -5,6 +5,7 @@ import { useI18n } from '~/composables/useI18n'
 const props = defineProps<{
   open: boolean
   initialData?: Participant | null
+  isOrganizerAction?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +27,7 @@ const carModel = ref('')
 const totalSeats = ref<number>(4)
 const price = ref<string>('')
 const departureLocation = ref('')
+const departureTime = ref('')
 const hasDriver = ref<boolean>(true)
 
 // Passenger fields
@@ -60,7 +62,7 @@ function handlePinInput(e: Event) {
   }
 }
 
-watch(() => props.open, (val) => {
+watch([() => props.open, () => props.initialData], ([val]) => {
   if (val) {
     if (props.initialData) {
       role.value = props.initialData.role || 'passenger'
@@ -69,11 +71,12 @@ watch(() => props.open, (val) => {
       pin.value = props.initialData.pin || ''
       notes.value = props.initialData.notes || ''
       carModel.value = props.initialData.carModel || ''
-      totalSeats.value = props.initialData.totalSeats || 4
+      totalSeats.value = Number(props.initialData.totalSeats) || 4
       price.value = props.initialData.price !== undefined && props.initialData.price !== null && props.initialData.price > 0
         ? String(props.initialData.price)
         : ''
       departureLocation.value = props.initialData.departureLocation || ''
+      departureTime.value = props.initialData.departureTime || ''
       hasDriver.value = props.initialData.hasDriver !== false
       pickupLocation.value = props.initialData.pickupLocation || ''
     } else {
@@ -86,6 +89,7 @@ watch(() => props.open, (val) => {
       totalSeats.value = 4
       price.value = ''
       departureLocation.value = ''
+      departureTime.value = ''
       hasDriver.value = true
       pickupLocation.value = ''
     }
@@ -111,9 +115,10 @@ function handleSubmit() {
 
   if (role.value === 'rider') {
     payload.carModel = carModel.value.trim() || 'Auto'
-    payload.totalSeats = Number(totalSeats.value) || 4
+    payload.totalSeats = Math.max(1, Math.min(12, Number(totalSeats.value) || 4))
     payload.price = numericPrice.value > 0 ? Math.round(numericPrice.value * 100) / 100 : null
     payload.departureLocation = departureLocation.value.trim()
+    payload.departureTime = departureTime.value.trim() || undefined
     payload.hasDriver = hasDriver.value
   } else {
     payload.pickupLocation = pickupLocation.value.trim()
@@ -129,7 +134,7 @@ function handleSubmit() {
   <UModal
     :open="open"
     @update:open="emit('update:open', $event)"
-    :title="isEdit ? t('participantModal.titleEdit') : (role === 'rider' ? t('eventView.imDriving') : t('participantModal.titleJoin'))"
+    :title="isEdit ? t('participantModal.titleEdit') : (isOrganizerAction ? (role === 'rider' ? t('eventView.orgAddCar') : t('eventView.orgAddPerson')) : (role === 'rider' ? t('eventView.imDriving') : t('participantModal.titleJoin')))"
     :ui="{ content: 'sm:max-w-lg max-h-[90dvh] overflow-y-auto' }"
   >
     <template #body>
@@ -240,12 +245,13 @@ function handleSubmit() {
             <UInput
               v-model="pin"
               :type="showPin ? 'text' : 'password'"
-              :placeholder="isEdit && initialData?.hasPin ? '•••• (lascia vuoto per mantenere il PIN attuale)' : t('participantModal.pinPlaceholder')"
+              :placeholder="isEdit && initialData?.hasPin ? '•••• (lascia vuoto per mantenere il PIN)' : t('participantModal.pinPlaceholder')"
               maxlength="8"
               inputmode="numeric"
               icon="i-lucide-key-round"
               :ui="{ trailing: 'pe-1' }"
-              class="w-full font-mono font-bold tracking-widest text-center"
+              class="w-full font-mono"
+              :class="pin ? 'font-bold tracking-widest text-center' : 'font-normal tracking-normal'"
               @input="handlePinInput"
             >
               <template #trailing>
@@ -275,17 +281,17 @@ function handleSubmit() {
           <!-- Who is driving Vehicle -->
           <div class="space-y-1">
             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Chi guida questo veicolo?
+              {{ t('participantModal.hasDriverLabel') }}
             </label>
-            <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
                 class="p-2.5 rounded-xl border text-center transition-all flex items-center justify-center gap-1.5 font-medium cursor-pointer"
                 :class="hasDriver ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'"
                 @click="hasDriver = true"
               >
-                <UIcon name="i-lucide-steering-wheel" class="h-4 w-4 text-emerald-600" />
-                <span>Guido io questa vettura</span>
+                <UIcon name="i-lucide-steering-wheel" class="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{{ t('participantModal.hasDriverYes') }}</span>
               </button>
               <button
                 type="button"
@@ -293,8 +299,8 @@ function handleSubmit() {
                 :class="!hasDriver ? 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 ring-2 ring-amber-500/20' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'"
                 @click="hasDriver = false"
               >
-                <UIcon name="i-lucide-car" class="h-4 w-4 text-amber-600" />
-                <span>Solo messa a disposizione (senza guidatore)</span>
+                <UIcon name="i-lucide-car" class="h-4 w-4 text-amber-600 shrink-0" />
+                <span>{{ t('participantModal.hasDriverNo') }}</span>
               </button>
             </div>
           </div>
@@ -314,12 +320,13 @@ function handleSubmit() {
             <div>
               <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 {{ t('participantModal.totalSeatsLabel') }}
+                <span class="text-[10px] text-slate-400 font-normal ml-1">(1-12)</span>
               </label>
               <UInput
                 v-model.number="totalSeats"
                 type="number"
                 min="1"
-                max="8"
+                max="12"
                 class="w-full"
               />
             </div>
@@ -363,17 +370,33 @@ function handleSubmit() {
             </div>
           </div>
 
-          <!-- Departure Location (Mandatory for Driver) -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              {{ t('participantModal.departureLocationLabel') }} *
-            </label>
-            <UInput
-              v-model="departureLocation"
-              :placeholder="t('participantModal.departureLocationPlaceholder')"
-              required
-              class="w-full"
-            />
+          <!-- Departure Location & Departure Time -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {{ t('participantModal.departureLocationLabel') }} *
+              </label>
+              <UInput
+                v-model="departureLocation"
+                :placeholder="t('participantModal.departureLocationPlaceholder')"
+                icon="i-lucide-map-pin"
+                required
+                class="w-full"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                {{ t('participantModal.departureTimeLabel') }}
+              </label>
+              <UInput
+                v-model="departureTime"
+                type="time"
+                :placeholder="t('participantModal.departureTimePlaceholder')"
+                icon="i-lucide-clock"
+                class="w-full font-mono"
+              />
+            </div>
           </div>
         </template>
 

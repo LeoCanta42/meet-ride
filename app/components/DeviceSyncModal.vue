@@ -131,41 +131,41 @@ function shareViaWhatsApp() {
         </div>
 
         <!-- Sync Method Tabs -->
-        <div class="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800 text-xs font-semibold">
+        <div class="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800 text-[11px] sm:text-xs font-semibold">
           <button
             type="button"
-            class="flex-1 py-1.5 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1"
+            class="py-1.5 px-1 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1 truncate"
             :class="activeTab === 'qr'
               ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'"
             @click="activeTab = 'qr'"
           >
-            <UIcon name="i-lucide-qr-code" class="h-3.5 w-3.5" />
-            <span>QR Code</span>
+            <UIcon name="i-lucide-qr-code" class="h-3.5 w-3.5 shrink-0" />
+            <span class="truncate">QR Code</span>
           </button>
 
           <button
             type="button"
-            class="flex-1 py-1.5 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1"
+            class="py-1.5 px-1 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1 truncate"
             :class="activeTab === 'link'
               ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'"
             @click="activeTab = 'link'"
           >
-            <UIcon name="i-lucide-link-2" class="h-3.5 w-3.5" />
-            <span>Link Personale</span>
+            <UIcon name="i-lucide-link-2" class="h-3.5 w-3.5 shrink-0" />
+            <span class="truncate">Link</span>
           </button>
 
           <button
             type="button"
-            class="flex-1 py-1.5 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1"
+            class="py-1.5 px-1 rounded-lg text-center transition-all inline-flex items-center justify-center gap-1 truncate"
             :class="activeTab === 'pin'
               ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-white'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'"
             @click="activeTab = 'pin'"
           >
-            <UIcon name="i-lucide-key-round" class="h-3.5 w-3.5" />
-            <span>Codice PIN</span>
+            <UIcon name="i-lucide-key-round" class="h-3.5 w-3.5 shrink-0" />
+            <span class="truncate">PIN</span>
           </button>
         </div>
 

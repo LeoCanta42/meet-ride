@@ -18,14 +18,24 @@ const description = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
-// Initialize default date (next Saturday at 09:00)
+// Initialize default date (next Saturday at 20:30 local time)
 onMounted(() => {
   const d = new Date()
   d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7))
   d.setHours(20, 30, 0, 0)
-  eventDate.value = d.toISOString().slice(0, 16)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  eventDate.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   arrivalTime.value = '20:30'
   generatePassword()
+})
+
+watch(eventDate, (newVal) => {
+  if (newVal && newVal.includes('T')) {
+    const timePart = newVal.split('T')[1]?.slice(0, 5)
+    if (timePart) {
+      arrivalTime.value = timePart
+    }
+  }
 })
 
 watch([user, initialLoaded], ([currentUser, loaded]) => {
@@ -135,21 +145,22 @@ async function handleSubmit() {
           />
         </div>
 
-        <!-- Destination, Date & Arrival Time -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="sm:col-span-1">
-            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-              {{ t('events.destination') }} *
-            </label>
-            <UInput
-              v-model="destination"
-              :placeholder="t('events.destinationPlaceholder')"
-              icon="i-lucide-map-pin"
-              required
-              class="w-full"
-            />
-          </div>
+        <!-- Destination -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+            {{ t('events.destination') }} *
+          </label>
+          <UInput
+            v-model="destination"
+            :placeholder="t('events.destinationPlaceholder')"
+            icon="i-lucide-map-pin"
+            required
+            class="w-full"
+          />
+        </div>
 
+        <!-- Date & Arrival Time -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               {{ t('events.date') }} *
@@ -169,7 +180,8 @@ async function handleSubmit() {
             </label>
             <UInput
               v-model="arrivalTime"
-              placeholder="es. 20:30"
+              type="time"
+              placeholder="20:30"
               icon="i-lucide-clock"
               required
               class="w-full font-mono font-medium"

@@ -13,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'claim', passengerId: string): void
+  (e: 'edit', passenger: Participant): void
   (e: 'remove-from-car', passengerId: string): void
   (e: 'reassign', passenger: Participant): void
   (e: 'delete', passengerId: string): void
@@ -34,6 +35,13 @@ const waLink = computed(() => {
 function handleClaim() {
   if (props.passenger) {
     emit('claim', props.passenger.id)
+    emit('update:open', false)
+  }
+}
+
+function handleEdit() {
+  if (props.passenger) {
+    emit('edit', props.passenger)
     emit('update:open', false)
   }
 }
@@ -167,6 +175,17 @@ function handleDelete() {
 
           <div class="flex items-center gap-2 flex-wrap">
             <UButton
+              color="neutral"
+              variant="outline"
+              size="xs"
+              @click="handleEdit"
+              class="text-xs font-semibold"
+            >
+              <UIcon name="i-lucide-pencil" class="h-3.5 w-3.5 mr-1 text-sky-600" />
+              {{ t('common.edit') }}
+            </UButton>
+
+            <UButton
               v-if="car"
               color="neutral"
               variant="outline"
@@ -186,7 +205,7 @@ function handleDelete() {
               class="text-xs font-semibold"
             >
               <UIcon name="i-lucide-arrow-left-right" class="h-3.5 w-3.5 mr-1" />
-              Sposta in altra auto
+              {{ car ? 'Sposta in altra auto' : 'Assegna a un\'auto' }}
             </UButton>
 
             <UButton
@@ -194,7 +213,7 @@ function handleDelete() {
               variant="ghost"
               size="xs"
               @click="handleDelete"
-              class="text-xs font-semibold ml-auto"
+              class="text-xs font-semibold sm:ml-auto"
             >
               <UIcon name="i-lucide-trash-2" class="h-3.5 w-3.5 mr-1" />
               Rimuovi dall'evento
@@ -210,7 +229,7 @@ function handleDelete() {
             size="sm"
             @click="emit('update:open', false)"
           >
-            {{ t('common.cancel') }}
+            {{ t('common.close') }}
           </UButton>
         </div>
       </div>

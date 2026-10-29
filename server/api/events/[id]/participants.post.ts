@@ -85,15 +85,23 @@ export default defineEventHandler(async (event) => {
     participantIndex = db.participants.findIndex(p => p.id === participantId && p.eventId === foundEvent.id)
     if (participantIndex >= 0) {
       const target = db.participants[participantIndex]!
-      if (!isOrganizer && target.token && target.token !== incomingToken) {
+      const owner = target.ownerParticipantId
+        ? db.participants.find(p => p.id === target.ownerParticipantId && p.eventId === foundEvent.id)
+        : null
+      const isTokenOwner = Boolean(
+        incomingToken && (target.token === incomingToken || (owner && owner.token === incomingToken))
+      )
+      if (!isOrganizer && target.token && !isTokenOwner) {
         throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a modificare questo partecipante' })
       }
     }
   } else if (!isOrganizerAction && incomingToken && !isAdditionalCar && !ownerParticipantId) {
-    participantIndex = db.participants.findIndex(p => p.token === incomingToken && p.eventId === foundEvent.id)
+    participantIndex = db.participants.findIndex(
+      p => p.token === incomingToken && p.eventId === foundEvent.id && !p.ownerParticipantId
+    )
   }
 
-  const parsedSeats = role === 'rider' ? Math.max(1, Math.min(12, parseInt(totalSeats, 10) || 4)) : undefined
+  const parsedSeats = role === 'rider' ? Math.max(1, Math.min(12, parseInt(String(totalSeats), 10) || 4)) : undefined
   let parsedPrice: number | null = null
   if (role === 'rider' && price !== undefined && price !== null && price !== '') {
     const numPrice = Number(price)
@@ -115,6 +123,14 @@ export default defineEventHandler(async (event) => {
           p.assignedRiderId = null
         }
       })
+    } else if (existing.role === 'rider' && role === 'rider' && parsedSeats) {
+      // If seats were reduced below current passenger count, unassign excess passengers
+      const seated = db.participants.filter(p => p.eventId === foundEvent.id && p.assignedRiderId === existing.id)
+      if (seated.length > parsedSeats) {
+        seated.slice(parsedSeats).forEach(p => {
+          p.assignedRiderId = null
+        })
+      }
     }
 
     // Preserve existing PIN if the user did not enter a new PIN during edit

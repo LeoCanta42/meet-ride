@@ -27,7 +27,8 @@ function packTokenWithMeta(
   pin?: string,
   price?: number | null,
   hasDriver?: boolean,
-  ownerId?: string | null
+  ownerId?: string | null,
+  totalSeats?: number
 ): string {
   const baseToken = (token || '').split('|')[0] || crypto.randomBytes(16).toString('hex')
   const parts = [baseToken]
@@ -41,6 +42,9 @@ function packTokenWithMeta(
   if (ownerId) {
     parts.push(`ownerId:${encodeURIComponent(ownerId)}`)
   }
+  if (totalSeats !== undefined && totalSeats !== null && !Number.isNaN(Number(totalSeats))) {
+    parts.push(`seats:${Number(totalSeats)}`)
+  }
   return parts.join('|')
 }
 
@@ -50,6 +54,7 @@ function unpackTokenMeta(rawToken?: string | null): {
   price?: number | null
   hasDriver?: boolean
   ownerId?: string | null
+  totalSeats?: number
 } {
   if (!rawToken) return { token: '' }
   const segments = rawToken.split('|')
@@ -58,6 +63,7 @@ function unpackTokenMeta(rawToken?: string | null): {
   let price: number | null | undefined
   let hasDriver: boolean | undefined
   let ownerId: string | null | undefined
+  let totalSeats: number | undefined
 
   for (let i = 1; i < segments.length; i++) {
     const seg = segments[i] || ''
@@ -70,9 +76,12 @@ function unpackTokenMeta(rawToken?: string | null): {
       hasDriver = seg.slice(10) === '1'
     } else if (seg.startsWith('ownerId:')) {
       ownerId = decodeURIComponent(seg.slice(8))
+    } else if (seg.startsWith('seats:')) {
+      const val = parseInt(seg.slice(6), 10)
+      if (!Number.isNaN(val) && val >= 1) totalSeats = val
     }
   }
-  return { token, pin, price, hasDriver, ownerId }
+  return { token, pin, price, hasDriver, ownerId, totalSeats }
 }
 
 function packEventDescription(
@@ -202,6 +211,8 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
             ? Boolean(p.has_driver)
             : (unpacked.hasDriver !== undefined ? unpacked.hasDriver : true)
           const resolvedOwnerId = p.owner_participant_id || unpacked.ownerId || null
+          const rawSeats = Number(p.total_seats ?? p.totalSeats ?? unpacked.totalSeats)
+          const resolvedSeats = !Number.isNaN(rawSeats) && rawSeats >= 1 ? rawSeats : 4
 
           return {
             id: p.id,
@@ -214,7 +225,7 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
             pickupLocation: p.pickup_location || undefined,
             pickupCoords: p.pickup_lat && p.pickup_lng ? { lat: p.pickup_lat, lng: p.pickup_lng } : null,
             carModel: p.car_model || undefined,
-            totalSeats: p.totalSeats || 4,
+            totalSeats: resolvedSeats,
             price: resolvedPrice,
             departureTime: p.departure_time || undefined,
             departureLocation: p.departure_location || undefined,
@@ -415,7 +426,7 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
             has_driver: p.hasDriver !== false,
             owner_participant_id: p.ownerParticipantId || null,
             assigned_rider_id: p.assignedRiderId || null,
-            token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId),
+            token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats),
             created_at: p.createdAt
           }))
 
@@ -441,7 +452,7 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
                     departure_lat: p.departureCoords?.lat || null,
                     departure_lng: p.departureCoords?.lng || null,
                     assigned_rider_id: p.assignedRiderId || null,
-                    token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId),
+                    token: packTokenWithMeta(p.token || '', p.pin, p.price, p.hasDriver, p.ownerParticipantId, p.totalSeats),
                     created_at: p.createdAt
                   }))
                   await supabase.from('participants').upsert(basePartRows as any, { onConflict: 'id' })

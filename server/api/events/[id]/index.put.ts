@@ -25,12 +25,17 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { title, description, destination, destinationCoords, eventDate, arrivalTime, sharedPassword, routePlan } = body || {}
 
+  const newDestination = destination ? destination.trim() : existingEvent.destination
+  const destinationChanged = newDestination.toLowerCase() !== (existingEvent.destination || '').trim().toLowerCase()
+
   const updated = {
     ...existingEvent,
     title: title ? title.trim() : existingEvent.title,
     description: description !== undefined ? description.trim() : existingEvent.description,
-    destination: destination ? destination.trim() : existingEvent.destination,
-    destinationCoords: destinationCoords !== undefined ? destinationCoords : existingEvent.destinationCoords,
+    destination: newDestination,
+    destinationCoords: destinationCoords !== undefined
+      ? destinationCoords
+      : (destinationChanged ? null : existingEvent.destinationCoords),
     eventDate: eventDate ? new Date(eventDate).toISOString() : existingEvent.eventDate,
     arrivalTime: arrivalTime !== undefined ? (arrivalTime ? String(arrivalTime).trim() : null) : existingEvent.arrivalTime,
     sharedPassword: sharedPassword ? sharedPassword.trim() : existingEvent.sharedPassword,

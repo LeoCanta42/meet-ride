@@ -35,8 +35,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Partecipante non trovato' })
   }
 
-  // Security check: only the event organizer or the participant with the matching secret token can delete
-  if (!isOrganizer && (!token || target.token !== token)) {
+  // Security check: only the event organizer/admin or the participant (or owner of secondary car) with matching token can delete
+  const owner = target.ownerParticipantId
+    ? db.participants.find(p => p.id === target.ownerParticipantId && p.eventId === foundEvent.id)
+    : null
+  const isTokenOwner = Boolean(token && (target.token === token || (owner && owner.token === token)))
+  if (!isOrganizer && !isTokenOwner) {
     throw createError({ statusCode: 403, statusMessage: 'Non autorizzato a rimuovere questo partecipante' })
   }
 

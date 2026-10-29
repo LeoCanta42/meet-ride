@@ -114,19 +114,6 @@ function handleChoiceReconnect() {
   showReconnectModal.value = true
 }
 
-function copyPersonalLink() {
-  if (!currentEvent.value || !myParticipant.value?.token) return
-  const origin = window.location.origin
-  const path = `/events/${currentEvent.value.slug || currentEvent.value.id}`
-  const url = `${origin}${path}?p=${myParticipant.value.token}`
-  navigator.clipboard.writeText(url)
-  toast.add({
-    title: 'Link personale copiato!',
-    description: 'Aprilo su un altro dispositivo per gestire subito la tua auto o il tuo posto.',
-    color: 'success'
-  })
-}
-
 onMounted(async () => {
   await loadEvent(eventIdOrSlug.value)
 })
@@ -545,14 +532,6 @@ const totalOccupiedSeats = computed(() => {
                 Organizzatore
               </span>
               <span
-                v-if="currentEvent.arrivalTime"
-                class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300 inline-flex items-center gap-1"
-                title="Orario di arrivo a destinazione"
-              >
-                <UIcon name="i-lucide-clock" class="h-3 w-3" />
-                Arrivo: {{ currentEvent.arrivalTime }}
-              </span>
-              <span
                 v-if="currentEvent.sharedPassword && currentEvent.sharedPassword !== '***'"
                 class="rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                 title="Password condivisa evento"
@@ -575,26 +554,14 @@ const totalOccupiedSeats = computed(() => {
             </p>
           </div>
 
-          <!-- Share & Actions -->
-          <div class="flex items-center gap-2 shrink-0 w-full md:w-auto flex-wrap">
-            <UButton
-              v-if="!myParticipant && allParticipants.length > 0"
-              color="neutral"
-              variant="outline"
-              size="md"
-              @click="preselectedParticipantId = ''; showReconnectModal = true"
-              class="font-semibold text-xs flex-1 md:flex-initial justify-center"
-            >
-              <UIcon name="i-lucide-log-in" class="h-4 w-4 mr-1 text-sky-600 dark:text-sky-400 shrink-0" />
-              <span>{{ t('eventView.reconnectPromptBtn') }}</span>
-            </UButton>
-
+          <!-- Share Action -->
+          <div class="flex items-center gap-2 shrink-0 w-full md:w-auto">
             <UButton
               color="neutral"
               variant="subtle"
               size="md"
               @click="copyShareLink"
-              class="font-semibold text-xs flex-1 md:flex-initial justify-center"
+              class="font-semibold text-xs w-full md:w-auto justify-center"
             >
               <UIcon name="i-lucide-share-2" class="h-4 w-4 mr-1.5 shrink-0" />
               {{ t('events.shareTitle') }}
@@ -626,7 +593,7 @@ const totalOccupiedSeats = computed(() => {
         </div>
       </div>
 
-      <!-- Current Participant Status & Actions (visible only when registered) -->
+      <!-- Current Participant Status & Actions (visible when registered) -->
       <div v-if="myParticipant" class="surface-card rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 dark:border-slate-800">
         <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div class="flex items-start sm:items-center gap-3 min-w-0 w-full lg:w-auto">
@@ -671,6 +638,19 @@ const totalOccupiedSeats = computed(() => {
 
           <div class="flex items-center flex-wrap gap-2 w-full lg:w-auto">
             <UButton
+              v-if="myParticipant.role === 'rider'"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              @click="openJoinModal('rider')"
+              class="text-xs font-semibold flex-1 sm:flex-initial justify-center"
+              title="Metti a disposizione un'ulteriore auto"
+            >
+              <UIcon name="i-lucide-plus" class="h-3.5 w-3.5 mr-1 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{{ t('eventView.addSecondCar') }}</span>
+            </UButton>
+
+            <UButton
               color="primary"
               variant="subtle"
               size="sm"
@@ -708,6 +688,58 @@ const totalOccupiedSeats = computed(() => {
         </div>
       </div>
 
+      <!-- Join Event Call-To-Action Banner (visible when user has NOT joined yet) -->
+      <div
+        v-else
+        class="surface-card rounded-2xl p-4 sm:p-5 shadow-sm border border-sky-200/80 bg-gradient-to-r from-sky-50/70 via-white to-emerald-50/40 dark:border-sky-900/50 dark:from-sky-950/30 dark:via-slate-900 dark:to-emerald-950/20"
+      >
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <h2 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <UIcon name="i-lucide-hand-metal" class="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>{{ t('eventView.joinBannerTitle') }}</span>
+            </h2>
+            <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {{ t('eventView.joinBannerSubtitle') }}
+            </p>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <UButton
+              color="primary"
+              variant="solid"
+              size="md"
+              @click="openJoinModal('rider')"
+              class="font-bold text-xs justify-center shadow-sm shadow-sky-500/20"
+            >
+              {{ t('eventView.imDriving') }}
+            </UButton>
+
+            <UButton
+              color="primary"
+              variant="subtle"
+              size="md"
+              @click="openJoinModal('passenger')"
+              class="font-bold text-xs justify-center"
+            >
+              {{ t('eventView.iNeedRide') }}
+            </UButton>
+
+            <UButton
+              v-if="allParticipants.length > 0"
+              color="neutral"
+              variant="outline"
+              size="md"
+              @click="preselectedParticipantId = ''; showReconnectModal = true"
+              class="font-semibold text-xs justify-center"
+            >
+              <UIcon name="i-lucide-log-in" class="h-4 w-4 mr-1 text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>{{ t('eventView.reconnectPromptBtn') }}</span>
+            </UButton>
+          </div>
+        </div>
+      </div>
+
       <!-- Organizer Full Control Toolbar (Feature 2) -->
       <div
         v-if="isOrganizer"
@@ -727,15 +759,15 @@ const totalOccupiedSeats = computed(() => {
           </div>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+        <div class="grid grid-cols-1 sm:flex items-center gap-2 shrink-0 w-full sm:w-auto">
           <UButton
             color="neutral"
             variant="outline"
             size="xs"
             @click="showEditEventModal = true"
-            class="font-bold text-xs border-purple-300 dark:border-purple-800"
+            class="font-bold text-xs border-purple-300 dark:border-purple-800 justify-center"
           >
-            <UIcon name="i-lucide-pencil" class="h-3.5 w-3.5 mr-1 text-purple-600 dark:text-purple-400" />
+            <UIcon name="i-lucide-pencil" class="h-3.5 w-3.5 mr-1 text-purple-600 dark:text-purple-400 shrink-0" />
             Modifica Evento
           </UButton>
 
@@ -743,9 +775,9 @@ const totalOccupiedSeats = computed(() => {
             color="primary"
             size="xs"
             @click="openOrganizerAddModal('rider')"
-            class="font-bold text-xs shadow-xs"
+            class="font-bold text-xs shadow-xs justify-center"
           >
-            <UIcon name="i-lucide-car" class="h-3.5 w-3.5 mr-1" />
+            <UIcon name="i-lucide-car" class="h-3.5 w-3.5 mr-1 shrink-0" />
             Aggiungi Guidatore
           </UButton>
 
@@ -754,9 +786,9 @@ const totalOccupiedSeats = computed(() => {
             variant="outline"
             size="xs"
             @click="openOrganizerAddModal('passenger')"
-            class="font-bold text-xs border-purple-300 dark:border-purple-800"
+            class="font-bold text-xs border-purple-300 dark:border-purple-800 justify-center"
           >
-            <UIcon name="i-lucide-user-plus" class="h-3.5 w-3.5 mr-1" />
+            <UIcon name="i-lucide-user-plus" class="h-3.5 w-3.5 mr-1 shrink-0" />
             Aggiungi Passeggero
           </UButton>
         </div>
@@ -785,19 +817,6 @@ const totalOccupiedSeats = computed(() => {
             <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               {{ cars.length }}
             </span>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <UButton
-              color="primary"
-              variant="ghost"
-              size="xs"
-              @click="openJoinModal('rider')"
-              class="font-semibold"
-            >
-              <UIcon name="i-lucide-plus" class="h-3.5 w-3.5 mr-1 shrink-0" />
-              {{ t('eventView.imDriving') }}
-            </UButton>
           </div>
         </div>
 
@@ -847,18 +866,6 @@ const totalOccupiedSeats = computed(() => {
               {{ unassignedPassengers.length }}
             </span>
           </div>
-
-          <UButton
-            v-if="!myParticipant || myParticipant.role !== 'passenger'"
-            color="primary"
-            variant="ghost"
-            size="xs"
-            @click="openJoinModal('passenger')"
-            class="font-semibold"
-          >
-            <UIcon name="i-lucide-plus" class="h-3.5 w-3.5 mr-1" />
-            {{ t('eventView.iNeedRide') }}
-          </UButton>
         </div>
 
         <!-- Empty Unassigned -->
@@ -1046,6 +1053,7 @@ const totalOccupiedSeats = computed(() => {
     <ParticipantModal
       v-model:open="isModalOpen"
       :initial-data="modalInitialData"
+      :is-organizer-action="isOrganizerAction"
       @submit="handleParticipantSubmit"
     />
 
@@ -1080,6 +1088,7 @@ const totalOccupiedSeats = computed(() => {
       :is-organizer="isOrganizer"
       :my-participant="myParticipant"
       @claim="handleClaimParticipant"
+      @edit="handleEditCar"
       @remove-from-car="handleOrganizerRemovePassengerFromCar"
       @reassign="openAssignModal"
       @delete="handleOrganizerDeletePassenger"

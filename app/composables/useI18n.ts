@@ -121,6 +121,9 @@ const translations = {
       noUnassigned: 'Tutti i passeggeri hanno trovato un posto in auto! 🎉',
       imDriving: '🚗 Offro un\'auto',
       iNeedRide: '🙋 Cerco un passaggio',
+      joinBannerTitle: 'Partecipa a questo evento',
+      joinBannerSubtitle: 'Come vuoi partecipare? Offri i posti della tua auto oppure cerca un passaggio.',
+      addSecondCar: 'Aggiungi 2ª auto',
       myStatus: 'La tua partecipazione:',
       editParticipation: 'Modifica i miei dati',
       leaveParticipation: 'Rimuovi la mia presenza',
@@ -150,7 +153,9 @@ const translations = {
       personInCar: 'persona in auto',
       freeRide: 'Passaggio gratuito',
       splitWithNext: 'Se sali a bordo',
-      whenFull: 'A pieno carico'
+      whenFull: 'A pieno carico',
+      freeSeat: 'Posto libero',
+      youAreDrivingAnother: 'Sei già guidatore di un\'altra auto'
     },
     participantModal: {
       titleJoin: 'Partecipa all\'Evento',
@@ -395,6 +400,9 @@ const translations = {
       noUnassigned: 'All passengers have a seat in a car! 🎉',
       imDriving: '🚗 I can drive (Offer ride)',
       iNeedRide: '🙋 I need a ride',
+      joinBannerTitle: 'Join this event',
+      joinBannerSubtitle: 'How would you like to participate? Offer seats in your car or look for a ride.',
+      addSecondCar: 'Add 2nd car',
       myStatus: 'Your registration:',
       editParticipation: 'Edit my details',
       leaveParticipation: 'Leave this event',
@@ -424,7 +432,9 @@ const translations = {
       personInCar: 'person in car',
       freeRide: 'Free ride',
       splitWithNext: 'If you join',
-      whenFull: 'When full'
+      whenFull: 'When full',
+      freeSeat: 'Free seat',
+      youAreDrivingAnother: 'You are driving another car'
     },
     participantModal: {
       titleJoin: 'Join Event Carpool',

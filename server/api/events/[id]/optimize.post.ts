@@ -20,7 +20,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizer = await getAuthenticatedOrganizer(event)
-  const isOrganizer = organizer && organizer.id === foundEvent.organizerId
+  const isOrganizer = Boolean(
+    organizer && (organizer.id === foundEvent.organizerId || organizer.role === 'admin' || organizer.isAdmin === true)
+  )
 
   if (!isOrganizer) {
     throw createError({

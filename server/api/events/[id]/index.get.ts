@@ -2,8 +2,15 @@ import { getDb } from '../../../utils/db'
 import { getAuthenticatedOrganizer, isEventUnlocked } from '../../../utils/auth'
 import type { CarWithSeats, Participant } from '~/types'
 
-function sanitizeParticipantForClient(p: Participant, callerTokens: Set<string>): Participant {
-  const isOwner = Boolean(p.token && callerTokens.has(p.token))
+function sanitizeParticipantForClient(
+  p: Participant,
+  callerTokens: Set<string>,
+  myParticipantId?: string | null
+): Participant {
+  const isOwner = Boolean(
+    (p.token && callerTokens.has(p.token)) ||
+    (myParticipantId && p.ownerParticipantId === myParticipantId)
+  )
   const { pin, token, ...rest } = p
   return {
     ...rest,
@@ -75,7 +82,7 @@ export default defineEventHandler(async (event) => {
   const cars: CarWithSeats[] = riders.map(rider => {
     const carPassengers = passengers
       .filter(p => p.assignedRiderId === rider.id)
-      .map(p => sanitizeParticipantForClient(p, callerTokens))
+      .map(p => sanitizeParticipantForClient(p, callerTokens, myParticipantRaw?.id))
     const total = rider.totalSeats || 4
     const occupied = carPassengers.length
     const hasDriver = rider.hasDriver !== false
@@ -85,7 +92,7 @@ export default defineEventHandler(async (event) => {
     const pricePerPersonFull = totalPrice !== null ? Math.round((totalPrice / ((hasDriver ? 1 : 0) + total)) * 100) / 100 : null
 
     return {
-      rider: sanitizeParticipantForClient(rider, callerTokens),
+      rider: sanitizeParticipantForClient(rider, callerTokens, myParticipantRaw?.id),
       passengers: carPassengers,
       totalSeats: total,
       occupiedSeats: occupied,
@@ -101,7 +108,7 @@ export default defineEventHandler(async (event) => {
 
   const unassignedPassengers = passengers
     .filter(p => !p.assignedRiderId)
-    .map(p => sanitizeParticipantForClient(p, callerTokens))
+    .map(p => sanitizeParticipantForClient(p, callerTokens, myParticipantRaw?.id))
 
   // Omit plaintext sharedPassword if viewer is not the organizer
   const safeEvent = {
@@ -115,7 +122,7 @@ export default defineEventHandler(async (event) => {
     isOrganizer,
     cars,
     unassignedPassengers,
-    myParticipant: myParticipantRaw ? sanitizeParticipantForClient(myParticipantRaw, callerTokens) : null,
+    myParticipant: myParticipantRaw ? sanitizeParticipantForClient(myParticipantRaw, callerTokens, myParticipantRaw.id) : null,
     totalRiders: riders.length,
     totalPassengers: passengers.length
   }

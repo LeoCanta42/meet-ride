@@ -286,7 +286,7 @@ async function handleReconnect() {
                   placeholder="es. 1234"
                   :ui="{ trailing: 'pe-1' }"
                   required
-                  class="w-full font-mono text-center text-sm font-bold tracking-widest"
+                  class="w-full font-mono text-sm font-bold"
                   autofocus
                 >
                   <template #trailing>

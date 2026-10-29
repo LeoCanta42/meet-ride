@@ -18,18 +18,19 @@ export default defineEventHandler(async (event) => {
   }
 
   const organizer = await getAuthenticatedOrganizer(event)
-  const isOrganizer = organizer?.id === foundEvent.organizerId
+  const isOrganizer = Boolean(
+    organizer && (organizer.id === foundEvent.organizerId || organizer.role === 'admin' || organizer.isAdmin === true)
+  )
   const unlocked = isOrganizer || isEventUnlocked(event, foundEvent.id)
 
   if (!unlocked) {
     throw createError({ statusCode: 403, statusMessage: 'Non autorizzato' })
   }
 
-  // Find passenger
-  const passenger = db.participants.find(p =>
-    p.eventId === foundEvent.id &&
-    ((passengerId && p.id === passengerId) || (token && p.token === token))
-  )
+  // Find passenger (prioritize explicit passengerId so secondary vehicles sharing a token don't shadow)
+  const passenger = passengerId
+    ? db.participants.find(p => p.eventId === foundEvent.id && p.id === passengerId)
+    : db.participants.find(p => p.eventId === foundEvent.id && p.role === 'passenger' && token && p.token === token)
 
   if (!passenger) {
     throw createError({ statusCode: 404, statusMessage: 'Passeggero non trovato' })
