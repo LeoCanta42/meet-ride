@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import { getDb, saveDb } from '../../../utils/db'
 import { isEventUnlocked, getAuthenticatedOrganizer, generateSecureToken } from '../../../utils/auth'
+import { geocodePlaceName } from '../../../utils/convoy'
 import type { Participant, ParticipantRole } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -133,6 +134,35 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Geocode destination on event if missing
+    if (!foundEvent.destinationCoords && foundEvent.destination) {
+      foundEvent.destinationCoords = await geocodePlaceName(foundEvent.destination)
+    }
+
+    // Geocode rider departure coords if missing
+    let resolvedDepartureCoords = departureCoords || null
+    if (role === 'rider') {
+      if (!resolvedDepartureCoords && cleanDepartureLocation) {
+        if (existing && existing.departureLocation === cleanDepartureLocation && existing.departureCoords) {
+          resolvedDepartureCoords = existing.departureCoords
+        } else {
+          resolvedDepartureCoords = await geocodePlaceName(cleanDepartureLocation, foundEvent.destination)
+        }
+      }
+    }
+
+    // Geocode passenger pickup coords if missing
+    let resolvedPickupCoords = pickupCoords || null
+    if (role === 'passenger') {
+      if (!resolvedPickupCoords && cleanPickupLocation) {
+        if (existing && existing.pickupLocation === cleanPickupLocation && existing.pickupCoords) {
+          resolvedPickupCoords = existing.pickupCoords
+        } else {
+          resolvedPickupCoords = await geocodePlaceName(cleanPickupLocation, foundEvent.destination)
+        }
+      }
+    }
+
     // Preserve existing PIN if the user did not enter a new PIN during edit
     const resolvedPin =
       typeof pin === 'string' && pin.trim().length > 0
@@ -149,13 +179,13 @@ export default defineEventHandler(async (event) => {
       pin: resolvedPin,
       notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
       pickupLocation: role === 'passenger' ? cleanPickupLocation : undefined,
-      pickupCoords: pickupCoords || null,
+      pickupCoords: role === 'passenger' ? resolvedPickupCoords || null : null,
       carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
       price: role === 'rider' ? parsedPrice : null,
       departureTime: role === 'rider' ? (typeof departureTime === 'string' && departureTime.trim() ? departureTime.trim().slice(0, 40) : undefined) : undefined,
       departureLocation: role === 'rider' ? cleanDepartureLocation : undefined,
-      departureCoords: role === 'rider' ? departureCoords || null : null,
+      departureCoords: role === 'rider' ? resolvedDepartureCoords || null : null,
       hasDriver: resolvedHasDriver,
       ownerParticipantId: ownerParticipantId || existing.ownerParticipantId || null,
       assignedRiderId: role === 'passenger' ? (existing.assignedRiderId || null) : null,
@@ -165,6 +195,22 @@ export default defineEventHandler(async (event) => {
   } else {
     // New participant
     const newId = crypto.randomUUID()
+
+    // Geocode destination on event if missing
+    if (!foundEvent.destinationCoords && foundEvent.destination) {
+      foundEvent.destinationCoords = await geocodePlaceName(foundEvent.destination)
+    }
+
+    let resolvedDepartureCoords = departureCoords || null
+    if (role === 'rider' && !resolvedDepartureCoords && cleanDepartureLocation) {
+      resolvedDepartureCoords = await geocodePlaceName(cleanDepartureLocation, foundEvent.destination)
+    }
+
+    let resolvedPickupCoords = pickupCoords || null
+    if (role === 'passenger' && !resolvedPickupCoords && cleanPickupLocation) {
+      resolvedPickupCoords = await geocodePlaceName(cleanPickupLocation, foundEvent.destination)
+    }
+
     updatedOrCreated = {
       id: newId,
       eventId: foundEvent.id,
@@ -174,13 +220,13 @@ export default defineEventHandler(async (event) => {
       pin: typeof pin === 'string' && pin.trim() ? pin.trim().slice(0, 20) : undefined,
       notes: typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 300) : undefined,
       pickupLocation: role === 'passenger' ? cleanPickupLocation : undefined,
-      pickupCoords: pickupCoords || null,
+      pickupCoords: role === 'passenger' ? resolvedPickupCoords || null : null,
       carModel: role === 'rider' ? (typeof carModel === 'string' && carModel.trim() ? carModel.trim().slice(0, 80) : 'Auto') : undefined,
       totalSeats: parsedSeats,
       price: role === 'rider' ? parsedPrice : null,
       departureTime: role === 'rider' ? (typeof departureTime === 'string' && departureTime.trim() ? departureTime.trim().slice(0, 40) : undefined) : undefined,
       departureLocation: role === 'rider' ? cleanDepartureLocation : undefined,
-      departureCoords: role === 'rider' ? departureCoords || null : null,
+      departureCoords: role === 'rider' ? resolvedDepartureCoords || null : null,
       hasDriver: resolvedHasDriver,
       ownerParticipantId: ownerParticipantId || null,
       assignedRiderId: null,
@@ -189,6 +235,10 @@ export default defineEventHandler(async (event) => {
     }
     db.participants.push(updatedOrCreated)
   }
+
+  // Clear outdated routePlan when participant is created or updated
+  foundEvent.routePlan = null
+  foundEvent.updatedAt = new Date().toISOString()
 
   await saveDb(db)
 

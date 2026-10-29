@@ -1,4 +1,4 @@
-import type { EventItem, CarWithSeats, Participant, OptimizationResult } from '~/types'
+import type { EventItem, CarWithSeats, Participant, OptimizationResult, OptimizationSuggestion } from '~/types'
 
 export function useEvent() {
   const currentEvent = useState<EventItem | null>('mr_current_event', () => null)
@@ -291,7 +291,12 @@ export function useEvent() {
     try {
       const res = await $fetch<{ success: boolean; routePlan: any }>(
         `/api/events/${currentEvent.value.id}/route`,
-        { method: 'POST' }
+        {
+          method: 'POST',
+          body: {
+            meetingPoints: currentEvent.value.meetingPoints || []
+          }
+        }
       )
       if (res.routePlan) {
         currentEvent.value.routePlan = res.routePlan
@@ -372,7 +377,7 @@ export function useEvent() {
     }
   }
 
-  async function optimizeSeats(apply = false): Promise<{ result?: OptimizationResult; error?: string }> {
+  async function optimizeSeats(apply = false, suggestions?: OptimizationSuggestion[]): Promise<{ result?: OptimizationResult; error?: string }> {
     if (!currentEvent.value) return { error: 'Nessun evento selezionato' }
 
     try {
@@ -380,7 +385,7 @@ export function useEvent() {
         `/api/events/${currentEvent.value.id}/optimize`,
         {
           method: 'POST',
-          body: { apply }
+          body: { apply, suggestions }
         }
       )
 

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import type { OrganizerUser, EventItem, Participant, ConvoyRoutePlan } from '~/types'
+import type { OrganizerUser, EventItem, Participant, ConvoyRoutePlan, ManualMeetingPoint } from '~/types'
 import { getSupabaseServerClient } from './supabase'
 
 export interface DatabaseSchema {
@@ -87,15 +87,14 @@ function unpackTokenMeta(rawToken?: string | null): {
 function packEventDescription(
   desc: string = '',
   arrivalTime?: string | null,
-  routePlan?: ConvoyRoutePlan | null
+  routePlan?: ConvoyRoutePlan | null,
+  meetingPoints?: ManualMeetingPoint[] | null
 ): string {
   const cleanDesc = (desc || '').replace(/\s*<!--mr-meta:[\s\S]*?-->/g, '').trimEnd()
-  const meta: Record<string, any> = {}
-  if (arrivalTime) meta.arrivalTime = arrivalTime
-  if (routePlan) meta.routePlan = routePlan
-
-  if (Object.keys(meta).length === 0) {
-    return cleanDesc
+  const meta: Record<string, any> = {
+    arrivalTime: arrivalTime || null,
+    routePlan: routePlan || null,
+    meetingPoints: Array.isArray(meetingPoints) ? meetingPoints : []
   }
   const metaStr = Buffer.from(JSON.stringify(meta), 'utf8').toString('base64url')
   return `${cleanDesc}\n<!--mr-meta:${metaStr}-->`
@@ -103,24 +102,28 @@ function packEventDescription(
 
 function unpackEventDescription(rawDesc: string = ''): {
   description: string
+  hasMeta: boolean
   arrivalTime?: string | null
   routePlan?: ConvoyRoutePlan | null
+  meetingPoints?: ManualMeetingPoint[]
 } {
-  if (!rawDesc) return { description: '' }
+  if (!rawDesc) return { description: '', hasMeta: false }
   const match = rawDesc.match(/<!--mr-meta:([A-Za-z0-9_-]+)-->/)
   const description = rawDesc.replace(/\s*<!--mr-meta:[\s\S]*?-->/g, '').trimEnd()
   if (!match || !match[1]) {
-    return { description }
+    return { description, hasMeta: false }
   }
   try {
     const meta = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8'))
     return {
       description,
+      hasMeta: true,
       arrivalTime: meta.arrivalTime || null,
-      routePlan: meta.routePlan || null
+      routePlan: meta.routePlan || null,
+      meetingPoints: Array.isArray(meta.meetingPoints) ? meta.meetingPoints : []
     }
   } catch {
-    return { description }
+    return { description, hasMeta: false }
   }
 }
 
@@ -189,10 +192,13 @@ export async function getDb(options?: { forceRefresh?: boolean }): Promise<Datab
               ? { lat: e.destination_lat, lng: e.destination_lng }
               : null,
             eventDate: e.event_date,
-            arrivalTime: e.arrival_time || unpacked.arrivalTime || null,
+            arrivalTime: unpacked.hasMeta ? (unpacked.arrivalTime || e.arrival_time || null) : (e.arrival_time || null),
             sharedPassword: e.shared_password,
             status: (e.status as any) || 'active',
-            routePlan: e.route_plan || unpacked.routePlan || null,
+            meetingPoints: unpacked.hasMeta
+              ? (unpacked.meetingPoints || [])
+              : (Array.isArray(e.meeting_points) ? e.meeting_points : []),
+            routePlan: unpacked.hasMeta ? (unpacked.routePlan || null) : (e.route_plan || null),
             createdAt: e.created_at,
             updatedAt: e.updated_at
           }
@@ -361,7 +367,7 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
             organizer_id: e.organizerId || null,
             slug: e.slug,
             title: e.title,
-            description: packEventDescription(e.description, e.arrivalTime, e.routePlan),
+            description: packEventDescription(e.description, e.arrivalTime, e.routePlan, e.meetingPoints),
             destination: e.destination,
             destination_lat: e.destinationCoords?.lat || null,
             destination_lng: e.destinationCoords?.lng || null,
@@ -384,7 +390,7 @@ export async function saveDb(data: DatabaseSchema): Promise<void> {
                     organizer_id: e.organizerId || null,
                     slug: e.slug,
                     title: e.title,
-                    description: packEventDescription(e.description, e.arrivalTime, e.routePlan),
+                    description: packEventDescription(e.description, e.arrivalTime, e.routePlan, e.meetingPoints),
                     destination: e.destination,
                     destination_lat: e.destinationCoords?.lat || null,
                     destination_lng: e.destinationCoords?.lng || null,

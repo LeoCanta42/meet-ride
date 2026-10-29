@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from '~/composables/useI18n'
 import { useEvent } from '~/composables/useEvent'
-import type { Participant } from '~/types'
+import type { Participant, CarWithSeats, ManualMeetingPoint } from '~/types'
 
 const route = useRoute()
 const eventIdOrSlug = computed(() => (route.params.id as string) || '')
@@ -73,6 +73,12 @@ function handleShowPassengerDetailById(passengerId: string) {
 
 // Convoy & AI calculation state (Feature 4)
 const convoyCalculating = ref(false)
+const meetingPointsSaving = ref(false)
+const optimizationPanelRef = ref<{ openAndCalculate?: () => void } | null>(null)
+
+function handleOpenOptimizer() {
+  optimizationPanelRef.value?.openAndCalculate?.()
+}
 
 const allParticipants = computed<Participant[]>(() => {
   const list: Participant[] = []
@@ -357,8 +363,8 @@ async function handleCalculateConvoy() {
     const res = await calculateConvoyRoute()
     if (res.success) {
       toast.add({
-        title: 'Itinerario e posti ottimizzati con successo!',
-        description: 'Passeggeri assegnati alle auto e tappe/ritrovi calcolati con Gemini AI.',
+        title: 'Tracciato calcolato con successo!',
+        description: 'Il percorso di ciascuna auto sulla mappa è stato aggiornato.',
         color: 'success'
       })
       if (currentEvent.value?.id) {
@@ -373,6 +379,34 @@ async function handleCalculateConvoy() {
     }
   } finally {
     convoyCalculating.value = false
+  }
+}
+
+async function handleSaveMeetingPoints(meetingPoints: ManualMeetingPoint[]) {
+  meetingPointsSaving.value = true
+  try {
+    const res = await updateEventDetails({ meetingPoints, routePlan: null })
+    if (res.success) {
+      if (unassignedPassengers.value.length === 0 && cars.value.length > 0) {
+        await handleCalculateConvoy()
+      } else {
+        toast.add({
+          title: 'Punti di ritrovo aggiornati!',
+          description: meetingPoints.length > 0
+            ? `${meetingPoints.length} punto/i di ritrovo salvati. Ricalcola la mappa per vedere il nuovo tracciato.`
+            : 'Punti di ritrovo rimossi: le auto andranno dritte a destinazione.',
+          color: 'success'
+        })
+      }
+    } else {
+      toast.add({
+        title: 'Errore',
+        description: res.error,
+        color: 'error'
+      })
+    }
+  } finally {
+    meetingPointsSaving.value = false
   }
 }
 
@@ -495,6 +529,10 @@ const totalSeats = computed(() => {
 
 const totalOccupiedSeats = computed(() => {
   return cars.value.reduce((acc, c) => acc + c.occupiedSeats, 0)
+})
+
+const totalPassengersCount = computed(() => {
+  return totalOccupiedSeats.value + unassignedPassengers.value.length
 })
 </script>
 
@@ -794,14 +832,36 @@ const totalOccupiedSeats = computed(() => {
         </div>
       </div>
 
-      <!-- Convoy Route & Track Map (Centralized Gemini AI Itinerary & Seat Allocation) -->
+      <!-- Task 1: Optimize People Arrangement in Cars (AI) -->
+      <OptimizationPanel
+        ref="optimizationPanelRef"
+        :event-id="currentEvent.id"
+        :is-organizer="isOrganizer"
+        :cars="cars"
+        :unassigned-count="unassignedPassengers.length"
+        :total-passengers="totalPassengersCount"
+        @optimized="loadEvent(eventIdOrSlug)"
+      />
+
+      <!-- Task 2: Manual Meeting Points for Specific Cars -->
+      <MeetingPointsPanel
+        :event="currentEvent"
+        :cars="cars"
+        :is-organizer="isOrganizer"
+        :saving="meetingPointsSaving"
+        @save="handleSaveMeetingPoints"
+      />
+
+      <!-- Task 3: Map with Cars Track to Reach Destination -->
       <ConvoyMap
         :event="currentEvent"
         :is-organizer="isOrganizer"
         :route-plan="currentEvent.routePlan"
         :cars="cars"
+        :unassigned-count="unassignedPassengers.length"
         :loading="convoyCalculating"
         @calculate="handleCalculateConvoy"
+        @open-optimizer="handleOpenOptimizer"
         @update-arrival-time="handleUpdateArrivalTime"
         @show-passenger="handleShowPassengerDetailById"
       />

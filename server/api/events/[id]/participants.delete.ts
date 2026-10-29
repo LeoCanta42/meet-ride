@@ -68,6 +68,21 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Clean up any deleted rider IDs from manual meetingPoints
+  if (Array.isArray(foundEvent.meetingPoints) && foundEvent.meetingPoints.length > 0) {
+    const deletedSet = new Set(idsToDelete)
+    foundEvent.meetingPoints = foundEvent.meetingPoints
+      .map(mp => ({
+        ...mp,
+        riderIds: (mp.riderIds || []).filter(rid => !deletedSet.has(rid))
+      }))
+      .filter(mp => mp.riderIds.length >= 2)
+  }
+
+  // Clear outdated routePlan when participants are removed
+  foundEvent.routePlan = null
+  foundEvent.updatedAt = new Date().toISOString()
+
   await deleteParticipantsFromDb(idsToDelete, db)
 
   return { success: true }

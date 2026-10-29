@@ -225,16 +225,6 @@ function handleSeatAction() {
         </div>
       </div>
 
-      <div v-if="car.rider.departureTime" class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-        <UIcon name="i-lucide-clock" class="h-4 w-4 shrink-0 text-amber-500" />
-        <div>
-          <span class="font-semibold text-slate-500 dark:text-slate-400">{{ t('car.departureTime') }}:</span>
-          <span class="ml-1 font-medium text-slate-800 dark:text-slate-200">
-            {{ car.rider.departureTime }}
-          </span>
-        </div>
-      </div>
-
       <div v-if="car.rider.phone" class="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
         <UIcon name="i-lucide-phone" class="h-4 w-4 shrink-0 text-emerald-500" />
         <a :href="'tel:' + cleanDriverPhone" class="hover:underline font-mono text-[11px] text-slate-700 dark:text-slate-300 truncate">

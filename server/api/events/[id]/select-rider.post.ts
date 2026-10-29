@@ -48,6 +48,7 @@ export default defineEventHandler(async (event) => {
   // If riderId is null, passenger wants to leave current car
   if (!riderId) {
     passenger.assignedRiderId = null
+    foundEvent.routePlan = null
     await saveDb(db)
     return { success: true, assignedRiderId: null }
   }
@@ -66,6 +67,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Quest\'auto è già al completo' })
   }
 
+  if (passenger.assignedRiderId !== rider.id) {
+    foundEvent.routePlan = null
+  }
   passenger.assignedRiderId = rider.id
   await saveDb(db)
 

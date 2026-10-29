@@ -3,18 +3,15 @@ import type {
   EventItem,
   Participant,
   ConvoyRoutePlan,
-  ConvoyWaypoint,
-  ConvoyStep,
-  ConvoyPassengerAssignment,
-  ConvoyUnassignedPassenger
+  ConvoyWaypoint
 } from '~/types'
 
-function getFirstAlias(fullName: string): string {
+export function getFirstAlias(fullName: string): string {
   const parts = fullName.trim().split(/\s+/)
   return parts[0] || 'Auto'
 }
 
-function sanitizeTextForAi(text?: string | null): string | null {
+export function sanitizeTextForAi(text?: string | null): string | null {
   if (!text) return null
   return text
     // Redact email addresses
@@ -25,9 +22,8 @@ function sanitizeTextForAi(text?: string | null): string | null {
 }
 
 const forwardGeoCache = new Map<string, { lat: number; lng: number }>()
-const reverseGeoCache = new Map<string, string>()
 
-function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371
   const dLat = ((b.lat - a.lat) * Math.PI) / 180
   const dLng = ((b.lng - a.lng) * Math.PI) / 180
@@ -35,30 +31,61 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return Math.sqrt(dLat * dLat + x * x) * R
 }
 
-function bearingFromToDeg(from: { lat: number; lng: number }, to: { lat: number; lng: number }): number {
+export function bearingFromToDeg(from: { lat: number; lng: number }, to: { lat: number; lng: number }): number {
   const dy = to.lat - from.lat
   const dx = (to.lng - from.lng) * Math.cos((from.lat * Math.PI) / 180)
   return (Math.atan2(dy, dx) * 180) / Math.PI
 }
 
-function angleDiffDeg(a: number, b: number): number {
+export function angleDiffDeg(a: number, b: number): number {
   const d = Math.abs(a - b) % 360
   return d > 180 ? 360 - d : d
 }
 
-function parseTimeToMinutes(timeStr?: string): number {
+export function parseTimeToMinutes(timeStr?: string): number {
   const m = String(timeStr || '').match(/(\d{1,2}):(\d{2})/)
-  return m && m[1] && m[2] ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 540
+  return m && m[1] && m[2] ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 1230 // default 20:30
 }
 
-function formatMinutesToTime(minutes: number): string {
+export function formatMinutesToTime(minutes: number): string {
   const safe = ((Math.round(minutes) % 1440) + 1440) % 1440
   const hh = Math.floor(safe / 60)
   const mm = safe % 60
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }
 
-async function geocodePlaceName(
+export function computeRouteFingerprint(
+  destination?: string | null,
+  arrivalTime?: string | null,
+  meetingPoints?: { name: string; time?: string | null; riderIds: string[] }[] | null,
+  cars?: { rider: Participant; passengers: Participant[] }[] | null
+): string {
+  const dest = (destination || '').trim().toLowerCase()
+  const arrTime = (arrivalTime || '').trim()
+
+  const mps = (meetingPoints || [])
+    .map(mp => `${mp.name.trim().toLowerCase()}#${mp.time || ''}#${(mp.riderIds || []).slice().sort().join(',')}`)
+    .sort()
+    .join('|')
+
+  const carsPart = (cars || [])
+    .slice()
+    .sort((a, b) => a.rider.id.localeCompare(b.rider.id))
+    .map(c => {
+      const riderKey = `${c.rider.id}#${(c.rider.departureLocation || '').trim().toLowerCase()}#${c.rider.departureTime || ''}`
+      const passKey = (c.passengers || [])
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(p => `${p.id}#${(p.pickupLocation || '').trim().toLowerCase()}`)
+        .join(',')
+      return `${riderKey}-->${passKey}`
+    })
+    .join('||')
+
+  return `${dest}__${arrTime}__${mps}__${carsPart}`
+}
+
+export async function geocodePlaceName(
   place: string,
   contextCity?: string
 ): Promise<{ lat: number; lng: number } | null> {
@@ -67,258 +94,114 @@ async function geocodePlaceName(
   const key = `${clean.toLowerCase()}|${(contextCity || '').toLowerCase()}`
   if (forwardGeoCache.has(key)) return forwardGeoCache.get(key)!
 
-  try {
-    const query = contextCity && !clean.toLowerCase().includes(contextCity.toLowerCase())
-      ? `${clean}, ${contextCity}, Italia`
-      : `${clean}, Italia`
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 1800)
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
-      {
-        headers: { 'User-Agent': 'MeetRide-ConvoyPlanner/1.0' },
-        signal: controller.signal
-      }
-    )
-    clearTimeout(timer)
-    if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data) && data[0]?.lat && data[0]?.lon) {
-        const coords = {
-          lat: Number(parseFloat(data[0].lat).toFixed(4)),
-          lng: Number(parseFloat(data[0].lon).toFixed(4))
+  const queries: string[] = []
+  const isStreetLike =
+    /^(via|viale|piazza|piazzale|corso|contrada|largo|vicolo|strada)\b/i.test(clean) &&
+    !clean.includes(',')
+
+  if (isStreetLike && contextCity && !clean.toLowerCase().includes(contextCity.toLowerCase())) {
+    queries.push(`${clean}, ${contextCity}, Italia`)
+  }
+  queries.push(`${clean}, Italia`)
+  if (!isStreetLike && contextCity && !clean.toLowerCase().includes(contextCity.toLowerCase())) {
+    queries.push(`${clean}, ${contextCity}, Italia`)
+  }
+
+  // Fallback for multi-word place names with a trailing regional qualifier (e.g. "Piano Provenzana etna")
+  const words = clean.split(/\s+/)
+  if (words.length >= 2) {
+    const withoutLast = words.slice(0, -1).join(' ')
+    queries.push(`${withoutLast}, Italia`)
+  }
+
+  for (const query of queries) {
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 2000)
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+        {
+          headers: { 'User-Agent': 'MeetRide-ConvoyPlanner/1.0' },
+          signal: controller.signal
         }
-        forwardGeoCache.set(key, coords)
-        return coords
+      )
+      clearTimeout(timer)
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data) && data[0]?.lat && data[0]?.lon) {
+          const coords = {
+            lat: Number(parseFloat(data[0].lat).toFixed(4)),
+            lng: Number(parseFloat(data[0].lon).toFixed(4))
+          }
+          forwardGeoCache.set(key, coords)
+          return coords
+        }
       }
+    } catch {
+      // Ignore network / timeout errors and try next query
     }
-  } catch {
-    // Ignore network / timeout errors
   }
   return null
 }
 
-async function reverseGeocodeLocality(lat: number, lng: number, fallbackLabel: string): Promise<string> {
-  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`
-  if (reverseGeoCache.has(key)) return reverseGeoCache.get(key)!
+/**
+ * Determines whether a passenger's pickup location is geographically reached AFTER
+ * the car's manual meeting point (along the merged convoy path to destination)
+ * rather than BEFORE the meeting point.
+ */
+export function isPassengerAfterMeetingPoint(
+  carCoords: { lat: number; lng: number } | null,
+  pCoords: { lat: number; lng: number } | null,
+  mpCoords: { lat: number; lng: number } | null,
+  destCoords: { lat: number; lng: number } | null
+): boolean {
+  if (!pCoords || !mpCoords) return false
 
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 1800)
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14`,
-      {
-        headers: { 'User-Agent': 'MeetRide-ConvoyPlanner/1.0' },
-        signal: controller.signal
-      }
-    )
-    clearTimeout(timer)
-    if (res.ok) {
-      const data = await res.json()
-      const addr = data?.address || {}
-      const name =
-        addr.town ||
-        addr.suburb ||
-        addr.village ||
-        addr.city_district ||
-        addr.municipality ||
-        addr.city ||
-        data?.name
-      if (name && typeof name === 'string') {
-        reverseGeoCache.set(key, name)
-        return name
-      }
+  const distMpToP = haversineKm(mpCoords, pCoords)
+  // If passenger is at the meeting point itself (< 0.8 km), pick them up right before/at the meeting point
+  if (distMpToP <= 0.8) return false
+
+  if (carCoords) {
+    const distStartToP = haversineKm(carCoords, pCoords)
+    // If passenger is at the car's departure location (< 0.8 km), pick them up at departure (before meeting point)
+    if (distStartToP <= 0.8) return false
+
+    const distStartToMp = haversineKm(carCoords, mpCoords)
+    // If the car starts at the meeting point itself, any passenger outside the meeting point is picked up after merging
+    if (distStartToMp <= 0.8) return true
+
+    // Compare total route distance: S -> P -> M -> D vs S -> M -> P -> D
+    if (destCoords) {
+      const distMpToDest = haversineKm(mpCoords, destCoords)
+      const distPToDest = haversineKm(pCoords, destCoords)
+      const routeBefore = distStartToP + distMpToP + distMpToDest
+      const routeAfter = distStartToMp + distMpToP + distPToDest
+      if (routeAfter + 0.5 < routeBefore) return true
     }
-  } catch {
-    // Ignore network / timeout errors
+
+    // Also check if M lies along the progression from S to P (P is further from S than M, and closer to M than to S)
+    if (distStartToP > distStartToMp + 0.5 && distMpToP < distStartToP) {
+      return true
+    }
+
+    return false
   }
-  return fallbackLabel
+
+  // Fallback if car start coords are unknown but dest coords are known
+  if (destCoords) {
+    return haversineKm(pCoords, destCoords) + 0.5 < haversineKm(mpCoords, destCoords)
+  }
+
+  return false
 }
 
 /**
- * Generalized post-processor that inspects all car trajectories toward destination
- * and creates ad-hoc meeting_point waypoints whenever 2 or more cars converge along
- * the same angular corridor without a shared meeting point, or separates meeting points
- * that collide on the exact same coordinates as a start/pickup marker.
+ * Task 3: Calculate precise per-car tracks to reach destination.
+ * - Requires all passengers to be already distributed in their cars.
+ * - Each car's track goes from its start -> its assigned passengers' pickups -> straight to destination
+ *   UNLESS the organizer explicitly configured manual meetingPoints for that car.
+ * - Does NOT guess or invent meeting points when none are set by the organizer.
  */
-export async function ensureCorridorMeetingPoints(plan: ConvoyRoutePlan): Promise<ConvoyRoutePlan> {
-  const waypoints = plan.waypoints || []
-  const dest = waypoints.find(w => w.type === 'destination')
-  if (!dest || typeof dest.lat !== 'number' || typeof dest.lng !== 'number') {
-    return plan
-  }
-
-  // 1. Collect all distinct car labels
-  const carNames: string[] = []
-  waypoints
-    .filter(w => w.type === 'start')
-    .forEach(w => {
-      (w.carNames || []).forEach(cn => {
-        const clean = cn.trim()
-        if (clean && !carNames.includes(clean)) carNames.push(clean)
-      })
-    })
-
-  if (carNames.length <= 1) return plan
-
-  const allLowerCarNames = carNames.map(c => c.toLowerCase())
-
-  function waypointMatchesCar(wp: ConvoyWaypoint, carName: string, carIdx: number): boolean {
-    if (!wp.carNames || wp.carNames.length === 0) return false
-    const lowerName = carName.toLowerCase()
-    return wp.carNames.some(cn => {
-      const lCn = cn.trim().toLowerCase()
-      if (!lCn) return false
-      if (lCn === lowerName) return true
-      if (allLowerCarNames.some((other, oIdx) => oIdx !== carIdx && other === lCn)) return false
-      const subMatch = lowerName.includes(lCn) || lCn.includes(lowerName)
-      if (subMatch) {
-        const matchesOtherToo = allLowerCarNames.some(
-          (other, oIdx) => oIdx !== carIdx && (other.includes(lCn) || lCn.includes(other))
-        )
-        if (!matchesOtherToo) return true
-      }
-      return false
-    })
-  }
-
-  // 2. Build each car's sequence of waypoints before destination
-  const carRoutes = carNames.map((carName, idx) => {
-    const rw = waypoints.filter(w => w.type !== 'destination' && waypointMatchesCar(w, carName, idx))
-    rw.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time))
-    return { carName, idx, wps: rw }
-  })
-
-  // Count cars at each meeting_point
-  const meetingCount = new Map<ConvoyWaypoint, number>()
-  carRoutes.forEach(cr => {
-    cr.wps.forEach(w => {
-      if (w.type === 'meeting_point') {
-        meetingCount.set(w, (meetingCount.get(w) || 0) + 1)
-      }
-    })
-  })
-
-  // 3. Identify cars whose last waypoint before destination is NOT a shared meeting_point (>=2 cars)
-  const unmerged = carRoutes
-    .filter(cr => {
-      const last = cr.wps[cr.wps.length - 1]
-      if (!last) return false
-      const hasSharedMeeting = cr.wps.some(w => w.type === 'meeting_point' && (meetingCount.get(w) || 0) >= 2)
-      return !hasSharedMeeting
-    })
-    .map(cr => {
-      const last = cr.wps[cr.wps.length - 1]!
-      return {
-        carName: cr.carName,
-        wps: cr.wps,
-        lastWp: last,
-        dDest: haversineKm(last, dest),
-        ang: bearingFromToDeg(dest, last)
-      }
-    })
-    .filter(u => u.dDest >= 2.5)
-
-  // 4. First check if any unmerged car naturally passes right through an existing shared meeting_point
-  const existingSharedMeetings = waypoints.filter(
-    w => w.type === 'meeting_point' && (meetingCount.get(w) || 0) >= 2
-  )
-  const joinedExisting = new Set<string>()
-  unmerged.forEach(u => {
-    for (const mp of existingSharedMeetings) {
-      const mpDist = haversineKm(mp, dest)
-      const mpAng = bearingFromToDeg(dest, mp)
-      const detour = haversineKm(u.lastWp, mp) + mpDist - u.dDest
-      if (u.dDest > mpDist + 1.0 && angleDiffDeg(u.ang, mpAng) <= 18 && detour <= 1.8) {
-        if (!mp.carNames.includes(u.carName)) {
-          mp.carNames.push(u.carName)
-        }
-        joinedExisting.add(u.carName)
-        break
-      }
-    }
-  })
-
-  const remainingUnmerged = unmerged.filter(u => !joinedExisting.has(u.carName))
-
-  // 5. Group remaining unmerged cars into converging angular corridors around destination
-  const visited = new Set<number>()
-  const destIdx = waypoints.findIndex(w => w.type === 'destination')
-
-  for (let i = 0; i < remainingUnmerged.length; i++) {
-    if (visited.has(i)) continue
-    const cluster = [remainingUnmerged[i]!]
-    visited.add(i)
-
-    for (let j = i + 1; j < remainingUnmerged.length; j++) {
-      if (visited.has(j)) continue
-      const cand = remainingUnmerged[j]!
-      const canJoin = cluster.some(c => {
-        const distRatio = Math.max(c.dDest, cand.dDest) / Math.max(0.5, Math.min(c.dDest, cand.dDest))
-        return angleDiffDeg(c.ang, cand.ang) <= 22 && distRatio <= 2.2
-      })
-      if (canJoin) {
-        cluster.push(cand)
-        visited.add(j)
-      }
-    }
-
-    if (cluster.length >= 2) {
-      cluster.sort((a, b) => a.dDest - b.dDest)
-      const closest = cluster[0]!
-      const avgLat = cluster.reduce((s, c) => s + c.lastWp.lat, 0) / cluster.length
-      const avgLng = cluster.reduce((s, c) => s + c.lastWp.lng, 0) / cluster.length
-
-      // Position ad-hoc meeting point downstream along the corridor between the closest stop and destination
-      const ratio = 0.65
-      const meetLat = Number((dest.lat + (closest.lastWp.lat * 0.6 + avgLat * 0.4 - dest.lat) * ratio).toFixed(4))
-      const meetLng = Number((dest.lng + (closest.lastWp.lng * 0.6 + avgLng * 0.4 - dest.lng) * ratio).toFixed(4))
-
-      const fallbackName = cluster.map(c => c.lastWp.name).slice(0, 2).join(' / ')
-      const localityName = await reverseGeocodeLocality(meetLat, meetLng, fallbackName)
-
-      const maxLastMin = Math.max(...cluster.map(c => parseTimeToMinutes(c.lastWp.time)))
-      const destMin = parseTimeToMinutes(dest.time)
-      const meetMin = Math.min(
-        destMin - 8,
-        Math.max(maxLastMin + 7, Math.round((maxLastMin + destMin) / 2))
-      )
-      const meetTime = formatMinutesToTime(meetMin)
-      const clusterCarNames = cluster.map(c => c.carName)
-
-      const newMeetingWp: ConvoyWaypoint = {
-        name: `Meeting Point (${localityName})`,
-        type: 'meeting_point',
-        time: meetTime,
-        carNames: clusterCarNames,
-        lat: meetLat,
-        lng: meetLng,
-        description: `Punto di unione in convoglio a ${localityName} per ${clusterCarNames.join(', ')}`
-      }
-
-      if (destIdx !== -1) {
-        waypoints.splice(destIdx, 0, newMeetingWp)
-      } else {
-        waypoints.push(newMeetingWp)
-      }
-    }
-  }
-
-  // 6. Ensure no meeting_point sits on the exact same coordinates (<0.35km) as a start/pickup waypoint
-  const nonMeetingWps = waypoints.filter(w => w.type === 'start' || w.type === 'pickup')
-  waypoints.forEach(wp => {
-    if (wp.type === 'meeting_point') {
-      const colliding = nonMeetingWps.find(other => haversineKm(wp, other) < 0.35)
-      if (colliding) {
-        wp.lat = Number((wp.lat + (dest.lat - wp.lat) * 0.28).toFixed(4))
-        wp.lng = Number((wp.lng + (dest.lng - wp.lng) * 0.28).toFixed(4))
-      }
-    }
-  })
-
-  return plan
-}
-
 export async function calculateConvoyRouteWithGemini(
   event: EventItem,
   riders: Participant[],
@@ -342,13 +225,17 @@ export async function calculateConvoyRouteWithGemini(
   if (riders.length === 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Nessun veicolo o guidatore disponibile per calcolare l\'itinerario e assegnare i posti.'
+      statusMessage: 'Nessun veicolo o guidatore disponibile per calcolare l\'itinerario.'
     })
   }
 
-  // Filter riders that have a specified departure location
-  const carsWithLocation = riders.filter(r => r.departureLocation && r.departureLocation.trim())
-  const validRiders = carsWithLocation.length > 0 ? carsWithLocation : riders
+  // Filter out driverless cars that have 0 passengers assigned
+  const activeRiders = riders.filter(r => {
+    const hasAssignedPassengers = passengers.some(p => p.assignedRiderId === r.id)
+    const inMeetingPoint = (event.meetingPoints || []).some(mp => (mp.riderIds || []).includes(r.id))
+    return r.hasDriver !== false || hasAssignedPassengers || inMeetingPoint
+  })
+  const validRiders = activeRiders.length > 0 ? activeRiders : riders
 
   // Resolve target arrival time
   let targetArrivalTime = event.arrivalTime || ''
@@ -360,128 +247,288 @@ export async function calculateConvoyRouteWithGemini(
       targetArrivalTime = '20:30'
     }
   }
+  const destMinutes = parseTimeToMinutes(targetArrivalTime)
 
   const destCoords =
     event.destinationCoords ||
     (await geocodePlaceName(event.destination)) ||
     null
+  if (destCoords && !event.destinationCoords) {
+    event.destinationCoords = destCoords
+  }
 
+  // Build car labels & geocode car start locations + assigned passengers
   const usedCarLabels = new Set<string>()
-  const carsData = await Promise.all(
+  const riderIdToCarLabel = new Map<string, string>()
+
+  const carsWithPassengers = await Promise.all(
     validRiders.map(async (r, idx) => {
-      const baseLabel = `${r.carModel || 'Auto'} di ${getFirstAlias(r.name)}${r.hasDriver === false ? ' (messa a disposizione senza autista)' : ''}`
+      const baseLabel = `${r.carModel || 'Auto'} di ${getFirstAlias(r.name)}`
       const carLabel = usedCarLabels.has(baseLabel.toLowerCase()) ? `${baseLabel} #${idx + 1}` : baseLabel
       usedCarLabels.add(carLabel.toLowerCase())
+      riderIdToCarLabel.set(r.id, carLabel)
 
-      const coords =
+      const startCoords =
         r.departureCoords ||
         (r.departureLocation ? await geocodePlaceName(r.departureLocation, event.destination) : null)
+      if (startCoords && !r.departureCoords) {
+        r.departureCoords = startCoords
+      }
 
-      const distanceToDestKm =
-        coords && destCoords ? Number(haversineKm(coords, destCoords).toFixed(1)) : null
-      const bearingFromDestDeg =
-        coords && destCoords ? Number(bearingFromToDeg(destCoords, coords).toFixed(1)) : null
+      const assignedPassengersRaw = passengers.filter(p => p.assignedRiderId === r.id)
+      const assignedPassengers = await Promise.all(
+        assignedPassengersRaw.map(async (p) => {
+          const pCoords =
+            p.pickupCoords ||
+            (p.pickupLocation ? await geocodePlaceName(p.pickupLocation, event.destination) : null)
+          if (pCoords && !p.pickupCoords) {
+            p.pickupCoords = pCoords
+          }
+
+          const distFromStartKm =
+            startCoords && pCoords ? Number(haversineKm(startCoords, pCoords).toFixed(1)) : null
+          const distToDestKm =
+            pCoords && destCoords ? Number(haversineKm(pCoords, destCoords).toFixed(1)) : null
+
+          return {
+            passengerId: p.id,
+            fullName: p.name,
+            alias: getFirstAlias(p.name),
+            pickupLocation: p.pickupLocation || 'Punto di ritiro',
+            coords: pCoords,
+            distFromStartKm,
+            distToDestKm
+          }
+        })
+      )
+
+      // Sort assigned passengers naturally along the route from car start toward destination
+      assignedPassengers.sort((a, b) => {
+        if (a.distFromStartKm !== null && b.distFromStartKm !== null) {
+          return a.distFromStartKm - b.distFromStartKm
+        }
+        if (a.distToDestKm !== null && b.distToDestKm !== null) {
+          return b.distToDestKm - a.distToDestKm
+        }
+        return 0
+      })
+
+      const distToDestKm =
+        startCoords && destCoords ? Number(haversineKm(startCoords, destCoords).toFixed(1)) : null
 
       return {
         riderId: r.id,
-        driverName: getFirstAlias(r.name),
+        driverName: r.name,
+        driverAlias: getFirstAlias(r.name),
         carLabel,
-        totalSeats: r.totalSeats || 4,
-        hasDriver: r.hasDriver !== false,
-        departureLocation: r.departureLocation || 'Punto di partenza non specificato',
-        coordinates: coords ? `${coords.lat}, ${coords.lng}` : null,
-        distanceToDestKm,
-        bearingFromDestDeg
+        departureLocation: r.departureLocation || 'Punto di partenza',
+        departureTime: r.departureTime || null,
+        coords: startCoords,
+        distToDestKm,
+        assignedPassengers
       }
     })
   )
 
-  const passengersData = await Promise.all(
-    passengers.map(async p => {
-      const coords =
-        p.pickupCoords ||
-        (p.pickupLocation ? await geocodePlaceName(p.pickupLocation, event.destination) : null)
+  // Process organizer-defined manual meeting points (if any)
+  const rawMeetingPoints = Array.isArray(event.meetingPoints) ? event.meetingPoints : []
+  const resolvedMeetingPoints = (
+    await Promise.all(
+      rawMeetingPoints.map(async (mp) => {
+        const carLabels = (mp.riderIds || [])
+          .map(rid => riderIdToCarLabel.get(rid))
+          .filter((label): label is string => Boolean(label))
 
-      const distanceToDestKm =
-        coords && destCoords ? Number(haversineKm(coords, destCoords).toFixed(1)) : null
-      const bearingFromDestDeg =
-        coords && destCoords ? Number(bearingFromToDeg(destCoords, coords).toFixed(1)) : null
+        if (!mp.name || carLabels.length < 2) return null
 
+        const mpCoords =
+          mp.coords ||
+          (await geocodePlaceName(mp.name, event.destination)) ||
+          null
+        if (mpCoords && !mp.coords) {
+          mp.coords = mpCoords
+        }
+
+        return {
+          id: mp.id,
+          name: mp.name,
+          time: mp.time || null,
+          notes: mp.notes || '',
+          riderIds: mp.riderIds,
+          carLabels,
+          coords: mpCoords
+        }
+      })
+    )
+  ).filter((mp): mp is NonNullable<typeof mp> => mp !== null)
+
+  // Split each car's passengers into pre-meeting-point vs post-meeting-point (convoy leg)
+  const carsWithSplitPassengers = carsWithPassengers.map(c => {
+    const carMp = resolvedMeetingPoints.find(mp => mp.carLabels.includes(c.carLabel))
+    if (!carMp) {
       return {
-        passengerId: p.id,
-        name: getFirstAlias(p.name),
-        pickupLocation: p.pickupLocation || 'Non specificato',
-        coordinates: coords ? `${coords.lat}, ${coords.lng}` : null,
-        distanceToDestKm,
-        bearingFromDestDeg,
-        notes: sanitizeTextForAi(p.notes),
-        currentAssignedRiderId: p.assignedRiderId || null
+        ...c,
+        carMp: null,
+        preMeetingPassengers: [...c.assignedPassengers],
+        postMeetingPassengers: [] as typeof c.assignedPassengers
       }
+    }
+
+    const preMeetingPassengers: typeof c.assignedPassengers = []
+    const postMeetingPassengers: typeof c.assignedPassengers = []
+
+    for (const p of c.assignedPassengers) {
+      if (isPassengerAfterMeetingPoint(c.coords, p.coords, carMp.coords, destCoords)) {
+        postMeetingPassengers.push(p)
+      } else {
+        preMeetingPassengers.push(p)
+      }
+    }
+
+    return {
+      ...c,
+      carMp,
+      preMeetingPassengers,
+      postMeetingPassengers
+    }
+  })
+
+  // For each meeting point, collect and order all post-meeting passengers across participating cars
+  const mpPostPassengersMap = new Map<
+    string,
+    Array<(typeof carsWithPassengers)[number]['assignedPassengers'][number] & { assignedCarLabel: string }>
+  >()
+
+  for (const mp of resolvedMeetingPoints) {
+    const postList: Array<(typeof carsWithPassengers)[number]['assignedPassengers'][number] & { assignedCarLabel: string }> = []
+    for (const c of carsWithSplitPassengers) {
+      if (mp.carLabels.includes(c.carLabel)) {
+        for (const p of c.postMeetingPassengers) {
+          postList.push({
+            ...p,
+            assignedCarLabel: c.carLabel
+          })
+        }
+      }
+    }
+
+    postList.sort((a, b) => {
+      const aDistFromMp = mp.coords && a.coords ? haversineKm(mp.coords, a.coords) : a.distFromStartKm
+      const bDistFromMp = mp.coords && b.coords ? haversineKm(mp.coords, b.coords) : b.distFromStartKm
+      if (aDistFromMp !== null && bDistFromMp !== null && Math.abs(aDistFromMp - bDistFromMp) > 0.3) {
+        return aDistFromMp - bDistFromMp
+      }
+      if (a.distToDestKm !== null && b.distToDestKm !== null) {
+        return b.distToDestKm - a.distToDestKm
+      }
+      return 0
     })
-  )
 
-  const prompt = `Sei un assistente logistico e di navigazione AI specializzato in carpooling, ottimizzazione delle rotte e pianificazione di convogli automobilistici.
+    mpPostPassengersMap.set(mp.id, postList)
+  }
 
-1. ASSEGNAZIONE INTELLIGENTE DEI PASSEGGERI ALLE MACCHINE (REGOLA DEL CORRIDOIO DA MONTE A VALLE):
-   - PRIORITÀ ASSOLUTA AL CORRIDOIO LINEARE: Usa "distanceToDestKm" e "bearingFromDestDeg" per capire chi parte più lontano ("a monte") e chi si trova lungo la stessa direttrice ("a valle") verso "${event.destination}". Se più passeggeri si trovano in sequenza lungo la STESSA direttrice stradale di un'auto (es. auto da Biancavilla con passeggeri a S.M. Licodia e Paternò, oppure auto da Capomulini con passeggero ad Aci Trezza), l'auto che parte più a monte DEVE raccogliere TUTTI i passeggeri consecutivi di quel percorso, purché abbia posti disponibili ("totalSeats").
-   - VIETATO TORNARE INDIETRO VERSO MONTE: Un'auto che parte già più a valle non deve salire verso monte a prendere passeggeri più lontani se c'è già un'auto a monte che scende lungo quella stessa direttrice.
-   - DIVIETO DI BILANCIAMENTO ARTIFICIALE ("NO ARTIFICIAL LOAD BALANCING"): NON dividere o spalmare forzatamente i passeggeri tra le auto solo per dare un passeggero a ciascuna! Se un'auto può caricare tutti i passeggeri situati lungo la sua rotta naturale, DEVE prenderli tutti. L'altra auto proveniente da un'altra zona viaggerà con eventuali passeggeri della propria zona, oppure con solo il guidatore fino al punto di ritrovo/confluenza.
-   - RISPETTO DELLA CAPIENZA ("totalSeats"): Non superare mai "totalSeats"; eventuali passeggeri in eccesso vanno in "unassignedPassengers".
+  // Build clean prompt data
+  const promptCars = carsWithSplitPassengers.map(c => {
+    const carMp = c.carMp
+    return {
+      carLabel: c.carLabel,
+      departureLocation: c.departureLocation,
+      preferredDepartureTime: c.departureTime,
+      coordinates: c.coords ? `${c.coords.lat}, ${c.coords.lng}` : null,
+      distanceToDestKm: c.distToDestKm,
+      passengersBeforeMeetingPoint: c.preMeetingPassengers.map(p => ({
+        name: p.alias,
+        pickupLocation: p.pickupLocation,
+        coordinates: p.coords ? `${p.coords.lat}, ${p.coords.lng}` : null,
+        distanceFromCarStartKm: p.distFromStartKm,
+        distanceToDestKm: p.distToDestKm
+      })),
+      passengersAfterMeetingPointInConvoy: c.postMeetingPassengers.map(p => ({
+        name: p.alias,
+        pickupLocation: p.pickupLocation,
+        coordinates: p.coords ? `${p.coords.lat}, ${p.coords.lng}` : null,
+        distanceFromCarStartKm: p.distFromStartKm,
+        distanceToDestKm: p.distToDestKm
+      })),
+      manualMeetingPoint: carMp
+        ? {
+            name: carMp.name,
+            preferredTime: carMp.time,
+            coordinates: carMp.coords ? `${carMp.coords.lat}, ${carMp.coords.lng}` : null,
+            meetsWithCars: carMp.carLabels
+          }
+        : null
+    }
+  })
 
-2. PIANIFICAZIONE TAPPE ("waypoints") E MEETING POINT AD HOC PER OGNI CORRIDOIO CON >= 2 AUTO:
-   - Tutti devono arrivare a "${event.destination}" entro le "${targetArrivalTime}".
-   - REGOLA FONDAMENTALE SUI MEETING POINT MULTIPLI (NESSUNA LINEA PARALLELA CHE SALTA I PUNTI DI CONFLUENZA):
-     * Raggruppa le auto per settore/corridoio geografico rispetto alla destinazione ("bearingFromDestDeg" simili entro ~20-25° o direttrici che scendono vicine).
-     * OGNI VOLTA che 2 o più auto convergono lungo lo stesso corridoio/versante, DEVI OBBLIGATORIAMENTE creare un "meeting_point" AD HOC per quel gruppo nel primo punto naturale di confluenza a valle delle loro fermate prima della destinazione (es. Biancavilla/Paternò + Belpasso -> "meeting_point" a Misterbianco; Pedara/Nicolosi + Mascalucia -> "meeting_point" a Gravina di Catania; Capomulini/Aci Trezza + Aci Castello -> "meeting_point" ad Aci Castello / Cannizzaro).
-     * NON lasciare MAI che due auto dello stesso corridoio traccino due linee dritte separate fino alla destinazione passando lontane dai reali punti di confluenza intermedi: falle SEMPRE unire nel "meeting_point" ad hoc del loro corridoio.
-     * Se invece un'auto è l'UNICA nel proprio corridoio/settore geografico, NON farla deviare verso il meeting point di un altro quadrante: andrà direttamente a destinazione lungo la propria linea.
-     * VIETATO CREARE MEETING POINT PER UNA SOLA AUTO: Ogni "meeting_point" deve avere almeno 2 auto in "carNames".
-   - REGOLE PER L'ATTRIBUTO "carNames" E GLI ORARI NEI "waypoints":
-     * "start": inserisci in "carNames" ESCLUSIVAMENTE l'auto che parte da lì.
-     * "pickup": inserisci in "carNames" SOLO l'auto che carica quel passeggero.
-     * "meeting_point": inserisci in "carNames" ESCLUSIVAMENTE le auto di quel corridoio che confluiscono in QUEL punto (coordinate distinte da start/pickup).
-     * "destination": inserisci in "carNames" TUTTE le auto che arrivano all'evento.
-     * Calcola a ritroso gli orari ("HH:MM") e fornisci coordinate lat/lng accurate per ogni tappa.
+  const meetingPointsPromptSection =
+    resolvedMeetingPoints.length > 0
+      ? `PUNTI DI RITROVO IMPOSTATI DALL'ORGANIZZATORE:
+${JSON.stringify(
+  resolvedMeetingPoints.map(mp => ({
+    name: mp.name,
+    time: mp.time,
+    coordinates: mp.coords ? `${mp.coords.lat}, ${mp.coords.lng}` : null,
+    carNames: mp.carLabels,
+    notes: mp.notes,
+    convoyPickupsAfterMeetingPoint: (mpPostPassengersMap.get(mp.id) || []).map(p => ({
+      name: p.alias,
+      pickupLocation: p.pickupLocation,
+      assignedCar: p.assignedCarLabel,
+      coordinates: p.coords ? `${p.coords.lat}, ${p.coords.lng}` : null
+    }))
+  })),
+  null,
+  2
+)}
+REGOLE SUI PUNTI DI RITROVO:
+- Usa ESCLUSIVAMENTE i punti di ritrovo manuali elencati qui sopra.
+- Per ciascuno di essi, crea un waypoint con "type": "meeting_point", "name" corrispondente e "carNames" contenente ESATTAMENTE le auto indicate per quel punto di ritrovo.
+- Le auto coinvolte in un punto di ritrovo partono dalla loro "start", passano dai "pickup" in "passengersBeforeMeetingPoint" (con "carNames": ["<carLabel>"]), poi convergono al loro "meeting_point" allo stesso orario.
+- Dal "meeting_point" in poi, le auto riunite proseguono INSIEME lungo un UNICO tracciato di convoglio ("carNames" contenente tutte le auto di quel punto di ritrovo), passando per gli eventuali passeggeri in "convoyPickupsAfterMeetingPoint" fino alla "destination" finale.
+- Le auto che NON sono incluse in alcun punto di ritrovo manuale NON devono avere alcun "meeting_point": dopo i propri "pickup", vanno dritte alla destinazione finale.
+- VIETATO inventare o aggiungere altri "meeting_point" non presenti nella lista dell'organizzatore.`
+      : `NESSUN PUNTO DI RITROVO IMPOSTATO:
+- L'organizzatore NON ha impostato alcun punto di ritrovo.
+- NON creare NESSUN waypoint di tipo "meeting_point".
+- Ogni auto parte dalla propria "start", effettua le fermate "pickup" dei propri passeggeri in ordine lungo il tragitto, e va DIRETTAMENTE alla "destination" finale.`
 
-DATI EVENTO: Destinazione "${event.destination}" | Arrivo "${targetArrivalTime}" | Data "${event.eventDate}"
-AUTO E GUIDATORI:
-${JSON.stringify(carsData)}
-PASSEGGERI:
-${JSON.stringify(passengersData)}
+  const prompt = `Sei un assistente di navigazione stradale. Tutti i passeggeri sono GIÀ stati assegnati alle rispettive auto.
+Il tuo compito è calcolare il tracciato ("waypoints") preciso per ciascuna auto, dall'origine alla destinazione finale "${event.destination}", con arrivo previsto entro le "${targetArrivalTime}".
+
+ISTRUZIONI PER LA CREAZIONE DEI WAYPOINTS:
+1. Per ogni auto in "AUTO E PASSEGGERI A BORDO":
+   - Crea 1 waypoint di partenza ("type": "start") con "carNames": ["<carLabel dell'auto>"].
+   - Crea 1 waypoint di salita ("type": "pickup") per ciascun passeggero in "passengersBeforeMeetingPoint" (prima dell'eventuale punto di ritrovo), con "carNames": ["<carLabel dell'auto>"].
+2. ${meetingPointsPromptSection}
+3. Crea infine 1 waypoint di arrivo ("type": "destination") per "${event.destination}" alle "${targetArrivalTime}" con tutte le auto in "carNames".
+4. Calcola orari realistici ("HH:MM") a ritroso rispetto all'orario di arrivo "${targetArrivalTime}" e fornisci coordinate lat/lng accurate per ogni tappa.
+
+DATI EVENTO:
+- Destinazione: "${event.destination}"${destCoords ? ` (Coordinate: ${destCoords.lat}, ${destCoords.lng})` : ''}
+- Orario di arrivo: "${targetArrivalTime}"
+
+AUTO E PASSEGGERI A BORDO:
+${JSON.stringify(promptCars, null, 2)}
 
 Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
 {
-  "passengerAssignments": [
-    {
-      "passengerId": "ID univoco del passeggero",
-      "passengerName": "Nome passeggero",
-      "assignedRiderId": "ID univoco dell'auto/guidatore assegnato",
-      "carLabel": "Etichetta dell'auto",
-      "reason": "Breve motivazione geografica"
-    }
-  ],
-  "unassignedPassengers": [
-    {
-      "passengerId": "ID univoco",
-      "passengerName": "Nome passeggero",
-      "reason": "Motivo"
-    }
-  ],
+  "summary": "Breve riepilogo dell'itinerario calcolato in italiano",
   "waypoints": [
     {
       "name": "Nome Località",
       "type": "start" | "pickup" | "meeting_point" | "destination",
       "time": "HH:MM",
-      "carNames": ["Nome Auto"],
-      "lat": 37.6433,
-      "lng": 14.8647,
-      "description": "Breve descrizione tappa"
+      "carNames": ["Etichetta esatta dell'auto"],
+      "lat": 45.4854,
+      "lng": 9.2045,
+      "description": "Descrizione tappa (es. Partenza auto / Salita passeggero Nome / Punto di ritrovo / Arrivo)"
     }
   ]
 }`
 
   const ai = new GoogleGenAI({ apiKey: resolvedKey })
-  const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.5-flash']
+  const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash']
   let rawJson = ''
   let lastError: any = null
 
@@ -502,62 +549,297 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido conforme a questa struttura:
     }
   }
 
-  if (!rawJson) {
+  let parsedWaypoints: any[] = []
+  let aiSummary = ''
+
+  if (rawJson) {
+    try {
+      const cleaned = rawJson.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
+      const parsed = JSON.parse(cleaned)
+      parsedWaypoints = Array.isArray(parsed?.waypoints) ? parsed.waypoints : []
+      aiSummary = typeof parsed?.summary === 'string' ? parsed.summary : ''
+    } catch (err) {
+      console.warn('[Convoy AI] JSON parse warning, using deterministic fallback:', err)
+    }
+  } else if (lastError) {
     throw createError({
       statusCode: 502,
       statusMessage: `Errore nella chiamata a Gemini AI: ${lastError?.message || 'Risposta vuota'}`
     })
   }
 
-  let parsed: any
-  try {
-    const cleaned = rawJson.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
-    parsed = JSON.parse(cleaned)
-  } catch (err) {
-    console.error('[Convoy AI] JSON parse error:', rawJson)
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Gemini AI ha restituito una risposta non conforme al formato JSON atteso.'
+  // Deterministic verification & assembly of waypoints so every car's track is 100% accurate:
+  // - Exact start for each car
+  // - Pre-meeting passenger pickups for that car before reaching the meeting point
+  // - Exact manual meeting points if set by organizer
+  // - Single merged convoy track from the meeting point through any post-meeting passenger pickups up to destination
+  // - Exact final destination
+  const finalWaypoints: ConvoyWaypoint[] = []
+  const fallbackDestCoords = destCoords || { lat: 41.9028, lng: 12.4964 }
+
+  // Helper to find matching AI waypoint for a car & type
+  function findAiWpForCar(carLabel: string, type: string, placeHint?: string) {
+    const lowerLabel = carLabel.toLowerCase()
+    const lowerHint = (placeHint || '').toLowerCase()
+    return parsedWaypoints.find(w => {
+      if (w?.type !== type) return false
+      const names: string[] = Array.isArray(w?.carNames) ? w.carNames.map((s: any) => String(s).toLowerCase()) : []
+      const carMatch = names.some(n => n === lowerLabel || n.includes(lowerLabel) || lowerLabel.includes(n))
+      if (!carMatch) return false
+      if (!lowerHint) return true
+      const wName = String(w?.name || '').toLowerCase()
+      const wDesc = String(w?.description || '').toLowerCase()
+      return wName.includes(lowerHint) || lowerHint.includes(wName) || wDesc.includes(lowerHint)
     })
   }
 
-  const passengerAssignments: ConvoyPassengerAssignment[] = (parsed.passengerAssignments || [])
-    .map((a: any) => ({
-      passengerId: String(a.passengerId || ''),
-      passengerName: String(a.passengerName || ''),
-      assignedRiderId: String(a.assignedRiderId || ''),
-      carLabel: String(a.carLabel || 'Auto'),
-      reason: String(a.reason || 'Assegnazione ottimale in base al percorso')
-    }))
-    .filter((a: ConvoyPassengerAssignment) => a.passengerId && a.assignedRiderId)
+  // Pre-calculate meeting point times so pre-meeting stops are strictly earlier
+  // and post-meeting stops fit comfortably between mpMin and destMinutes
+  const mpTimeMinutesMap = new Map<string, number>()
+  for (const mp of resolvedMeetingPoints) {
+    const postList = mpPostPassengersMap.get(mp.id) || []
+    let postChainDistKm = 0
+    let prevCoord = mp.coords
+    for (const p of postList) {
+      if (prevCoord && p.coords) {
+        postChainDistKm += haversineKm(prevCoord, p.coords)
+      }
+      if (p.coords) prevCoord = p.coords
+    }
+    if (prevCoord && destCoords) {
+      postChainDistKm += haversineKm(prevCoord, destCoords)
+    }
 
-  const unassignedPassengers: ConvoyUnassignedPassenger[] = (parsed.unassignedPassengers || [])
-    .map((u: any) => ({
-      passengerId: String(u.passengerId || ''),
-      passengerName: String(u.passengerName || ''),
-      reason: String(u.reason || 'Posti auto esauriti')
-    }))
-    .filter((u: ConvoyUnassignedPassenger) => u.passengerId)
+    const estimatedPostMinutes = postChainDistKm > 0
+      ? Math.max(15 + postList.length * 5, Math.min(150, Math.round(postChainDistKm * 1.15) + postList.length * 5))
+      : 20 + postList.length * 8
 
-  const waypoints: ConvoyWaypoint[] = (parsed.waypoints || []).map((w: any) => ({
-    name: String(w.name || 'Tappa'),
-    type: ['start', 'pickup', 'meeting_point', 'destination'].includes(w.type) ? w.type : 'meeting_point',
-    time: String(w.time || targetArrivalTime),
-    carNames: Array.isArray(w.carNames) ? w.carNames.map(String) : [],
-    lat: Number(w.lat) || 37.5,
-    lng: Number(w.lng) || 15.0,
-    description: String(w.description || '')
-  }))
+    const aiMp = parsedWaypoints.find(
+      w => w?.type === 'meeting_point' &&
+        (String(w?.name || '').toLowerCase().includes(mp.name.toLowerCase()) ||
+          mp.name.toLowerCase().includes(String(w?.name || '').toLowerCase()))
+    )
 
-  const plan: ConvoyRoutePlan = {
-    summary: '',
-    arrivalTime: targetArrivalTime,
-    waypoints,
-    steps: [],
-    passengerAssignments,
-    unassignedPassengers,
-    calculatedAt: new Date().toISOString()
+    const maxAllowedMpMin = destMinutes - Math.max(12, (postList.length + 1) * 5)
+    let mpMin = mp.time
+      ? parseTimeToMinutes(mp.time)
+      : aiMp?.time
+        ? parseTimeToMinutes(aiMp.time)
+        : destMinutes - estimatedPostMinutes
+
+    if (mpMin > maxAllowedMpMin) {
+      mpMin = maxAllowedMpMin
+    }
+    mpTimeMinutesMap.set(mp.id, mpMin)
   }
 
-  return await ensureCorridorMeetingPoints(plan)
+  // 1. Build each car's start and PRE-meeting passenger pickup waypoints
+  for (let cIdx = 0; cIdx < carsWithSplitPassengers.length; cIdx++) {
+    const car = carsWithSplitPassengers[cIdx]!
+    const carMp = car.carMp
+    const prePassengers = car.preMeetingPassengers
+    const endLimitMin = carMp ? (mpTimeMinutesMap.get(carMp.id) ?? (destMinutes - 20)) : destMinutes
+
+    const distToTargetKm =
+      car.coords && carMp?.coords
+        ? Number(haversineKm(car.coords, carMp.coords).toFixed(1))
+        : car.distToDestKm
+
+    const totalStopsBeforeEnd = 1 + prePassengers.length
+    const estimatedDriveMinutes = distToTargetKm !== null
+      ? Math.max(10 + prePassengers.length * 4, Math.min(180, Math.round(distToTargetKm * 1.15) + prePassengers.length * 5))
+      : 25 + prePassengers.length * 7
+
+    const aiStart = findAiWpForCar(car.carLabel, 'start')
+    let startMin = car.departureTime
+      ? parseTimeToMinutes(car.departureTime)
+      : aiStart?.time
+        ? parseTimeToMinutes(aiStart.time)
+        : endLimitMin - estimatedDriveMinutes
+
+    // Ensure startMin leaves enough room for all pre-meeting passenger pickups before endLimitMin
+    const maxAllowedStartMin = endLimitMin - totalStopsBeforeEnd * 4
+    if (startMin > maxAllowedStartMin) {
+      startMin = maxAllowedStartMin
+    }
+
+    const startLat = car.coords?.lat ?? (Number(aiStart?.lat) || Number((fallbackDestCoords.lat + 0.04 * (cIdx + 1)).toFixed(4)))
+    const startLng = car.coords?.lng ?? (Number(aiStart?.lng) || Number((fallbackDestCoords.lng - 0.04 * (cIdx + 1)).toFixed(4)))
+
+    finalWaypoints.push({
+      name: car.departureLocation,
+      type: 'start',
+      time: formatMinutesToTime(startMin),
+      carNames: [car.carLabel],
+      lat: startLat,
+      lng: startLng,
+      description: `Partenza ${car.carLabel}${car.assignedPassengers.length === 0 ? ' (diretta verso destinazione)' : ''}`
+    })
+
+    // Add pickup waypoints for each pre-meeting passenger assigned to this car
+    const stepMinutes = Math.max(
+      3,
+      Math.floor((endLimitMin - startMin) / (prePassengers.length + 1))
+    )
+    let prevMin = startMin
+
+    for (let pIdx = 0; pIdx < prePassengers.length; pIdx++) {
+      const p = prePassengers[pIdx]!
+      const aiPickup =
+        findAiWpForCar(car.carLabel, 'pickup', p.pickupLocation) ||
+        findAiWpForCar(car.carLabel, 'pickup', p.alias)
+
+      let pickupMin = aiPickup?.time ? parseTimeToMinutes(aiPickup.time) : prevMin + stepMinutes
+      const minAllowed = prevMin + 2
+      const maxAllowed = endLimitMin - (prePassengers.length - pIdx) * 2
+      if (pickupMin < minAllowed || pickupMin > maxAllowed) {
+        pickupMin = Math.max(minAllowed, Math.min(maxAllowed, prevMin + stepMinutes))
+      }
+      prevMin = pickupMin
+
+      const ratio = (pIdx + 1) / (prePassengers.length + 1)
+      const targetLat = carMp?.coords?.lat ?? fallbackDestCoords.lat
+      const targetLng = carMp?.coords?.lng ?? fallbackDestCoords.lng
+      const pickupLat =
+        p.coords?.lat ??
+        (Number(aiPickup?.lat) || Number((startLat + (targetLat - startLat) * ratio).toFixed(4)))
+      const pickupLng =
+        p.coords?.lng ??
+        (Number(aiPickup?.lng) || Number((startLng + (targetLng - startLng) * ratio).toFixed(4)))
+
+      finalWaypoints.push({
+        name: p.pickupLocation,
+        type: 'pickup',
+        time: formatMinutesToTime(pickupMin),
+        carNames: [car.carLabel],
+        lat: pickupLat,
+        lng: pickupLng,
+        description: `Salita a bordo: ${p.fullName} (su ${car.carLabel})`
+      })
+    }
+  }
+
+  // 2. Add organizer-defined manual meeting points AND their post-meeting convoy pickups
+  const aiDest = parsedWaypoints.find(w => w?.type === 'destination')
+  const destLat = destCoords?.lat ?? (Number(aiDest?.lat) || fallbackDestCoords.lat)
+  const destLng = destCoords?.lng ?? (Number(aiDest?.lng) || fallbackDestCoords.lng)
+
+  for (const mp of resolvedMeetingPoints) {
+    const aiMp = parsedWaypoints.find(
+      w => w?.type === 'meeting_point' &&
+        (String(w?.name || '').toLowerCase().includes(mp.name.toLowerCase()) ||
+          mp.name.toLowerCase().includes(String(w?.name || '').toLowerCase()))
+    )
+    const mpMin = mpTimeMinutesMap.get(mp.id) ?? (destMinutes - 20)
+
+    // Fallback coordinates: average between participating cars' last stops and destination
+    const participatingStops = finalWaypoints.filter(w =>
+      w.carNames.some(cn => mp.carLabels.includes(cn))
+    )
+    const avgLat = participatingStops.length > 0
+      ? participatingStops.reduce((s, w) => s + w.lat, 0) / participatingStops.length
+      : fallbackDestCoords.lat
+    const avgLng = participatingStops.length > 0
+      ? participatingStops.reduce((s, w) => s + w.lng, 0) / participatingStops.length
+      : fallbackDestCoords.lng
+
+    const mpLat =
+      mp.coords?.lat ??
+      (Number(aiMp?.lat) || Number(((avgLat + fallbackDestCoords.lat) / 2).toFixed(4)))
+    const mpLng =
+      mp.coords?.lng ??
+      (Number(aiMp?.lng) || Number(((avgLng + fallbackDestCoords.lng) / 2).toFixed(4)))
+
+    finalWaypoints.push({
+      name: mp.name,
+      type: 'meeting_point',
+      time: formatMinutesToTime(mpMin),
+      carNames: [...mp.carLabels],
+      lat: mpLat,
+      lng: mpLng,
+      description: mp.notes
+        ? `${mp.notes} — Ritrovo per: ${mp.carLabels.join(', ')}`
+        : `Punto di ritrovo per: ${mp.carLabels.join(', ')}`
+    })
+
+    // Add post-meeting pickups along the single merged convoy route from mp to destination
+    const postList = mpPostPassengersMap.get(mp.id) || []
+    if (postList.length > 0) {
+      const stepPost = Math.max(
+        3,
+        Math.floor((destMinutes - mpMin) / (postList.length + 1))
+      )
+      let prevPostMin = mpMin
+
+      for (let pIdx = 0; pIdx < postList.length; pIdx++) {
+        const p = postList[pIdx]!
+        const aiPickup =
+          findAiWpForCar(p.assignedCarLabel, 'pickup', p.pickupLocation) ||
+          findAiWpForCar(p.assignedCarLabel, 'pickup', p.alias)
+
+        let pickupMin = aiPickup?.time ? parseTimeToMinutes(aiPickup.time) : prevPostMin + stepPost
+        const minAllowed = prevPostMin + 2
+        const maxAllowed = destMinutes - (postList.length - pIdx) * 2
+        if (pickupMin < minAllowed || pickupMin > maxAllowed) {
+          pickupMin = Math.max(minAllowed, Math.min(maxAllowed, prevPostMin + stepPost))
+        }
+        prevPostMin = pickupMin
+
+        const ratio = (pIdx + 1) / (postList.length + 1)
+        const pickupLat =
+          p.coords?.lat ??
+          (Number(aiPickup?.lat) || Number((mpLat + (destLat - mpLat) * ratio).toFixed(4)))
+        const pickupLng =
+          p.coords?.lng ??
+          (Number(aiPickup?.lng) || Number((mpLng + (destLng - mpLng) * ratio).toFixed(4)))
+
+        finalWaypoints.push({
+          name: p.pickupLocation,
+          type: 'pickup',
+          time: formatMinutesToTime(pickupMin),
+          // All cars merged at this meeting point travel together along this single track
+          carNames: [...mp.carLabels],
+          lat: pickupLat,
+          lng: pickupLng,
+          description: `Salita a bordo: ${p.fullName} (su ${p.assignedCarLabel} — in convoglio)`
+        })
+      }
+    }
+  }
+
+  // 3. Add final destination waypoint
+  const allCarLabels = carsWithPassengers.map(c => c.carLabel)
+
+  finalWaypoints.push({
+    name: event.destination,
+    type: 'destination',
+    time: targetArrivalTime,
+    carNames: allCarLabels,
+    lat: destLat,
+    lng: destLng,
+    description: `Arrivo a destinazione (${event.title})`
+  })
+
+  const inputFingerprint = computeRouteFingerprint(
+    event.destination,
+    targetArrivalTime,
+    resolvedMeetingPoints,
+    validRiders.map(r => ({
+      rider: r,
+      passengers: passengers.filter(p => p.assignedRiderId === r.id)
+    }))
+  )
+
+  return {
+    summary:
+      aiSummary ||
+      (resolvedMeetingPoints.length > 0
+        ? `Tracciato calcolato per ${carsWithPassengers.length} auto con ${resolvedMeetingPoints.length} punto/i di ritrovo fino a ${event.destination}.`
+        : `Tracciato diretto calcolato per ${carsWithPassengers.length} auto fino a ${event.destination}.`),
+    arrivalTime: targetArrivalTime,
+    inputFingerprint,
+    waypoints: finalWaypoints,
+    steps: [],
+    calculatedAt: new Date().toISOString()
+  }
 }

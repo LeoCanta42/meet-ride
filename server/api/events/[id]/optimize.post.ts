@@ -1,12 +1,15 @@
 import { getDb, saveDb } from '../../../utils/db'
-import { isEventUnlocked, getAuthenticatedOrganizer } from '../../../utils/auth'
+import { getAuthenticatedOrganizer } from '../../../utils/auth'
 import { optimizeSeatAllocationWithGemini } from '../../../utils/optimizer'
-import type { Participant } from '~/types'
+import type { Participant, OptimizationSuggestion } from '~/types'
 
 export default defineEventHandler(async (event) => {
   const eventId = getRouterParam(event, 'id')
   const body = await readBody(event).catch(() => ({}))
   const apply = !!body?.apply
+  const providedSuggestions: OptimizationSuggestion[] | undefined = Array.isArray(body?.suggestions)
+    ? body.suggestions
+    : undefined
 
   if (!eventId) {
     throw createError({ statusCode: 400, statusMessage: 'ID evento mancante' })
@@ -27,7 +30,7 @@ export default defineEventHandler(async (event) => {
   if (!isOrganizer) {
     throw createError({
       statusCode: 403,
-      statusMessage: 'Solo l\'organizzatore che ha creato l\'evento può utilizzare l\'ottimizzatore AI'
+      statusMessage: 'Solo l\'organizzatore dell\'evento può utilizzare l\'ottimizzatore AI'
     })
   }
 
@@ -35,16 +38,77 @@ export default defineEventHandler(async (event) => {
   const riders = eventParticipants.filter(p => p.role === 'rider')
   const passengers = eventParticipants.filter(p => p.role === 'passenger')
 
+  // If applying already-previewed suggestions, apply them directly without a second AI call
+  if (apply && providedSuggestions && providedSuggestions.length > 0) {
+    const carSeatCount = new Map<string, number>()
+
+    // Reset all event passengers first so the new distribution is applied cleanly
+    for (const p of passengers) {
+      p.assignedRiderId = null
+    }
+
+    let appliedCount = 0
+    for (const suggestion of providedSuggestions) {
+      const passenger = db.participants.find(
+        (p: Participant) => p.id === suggestion.passengerId && p.eventId === foundEvent.id && p.role === 'passenger'
+      )
+      const rider = db.participants.find(
+        (r: Participant) => r.id === suggestion.suggestedRiderId && r.eventId === foundEvent.id && r.role === 'rider'
+      )
+      if (passenger && rider) {
+        const used = carSeatCount.get(rider.id) || 0
+        const maxSeats = rider.totalSeats || 4
+        if (used < maxSeats) {
+          carSeatCount.set(rider.id, used + 1)
+          passenger.assignedRiderId = rider.id
+          appliedCount++
+        }
+      }
+    }
+
+    // Clear outdated routePlan when passenger distribution changes
+    foundEvent.routePlan = null
+    foundEvent.updatedAt = new Date().toISOString()
+    await saveDb(db)
+
+    return {
+      suggestions: providedSuggestions,
+      totalMoved: appliedCount,
+      summary: `${appliedCount} passeggeri assegnati alle auto con successo.`,
+      unassignedRemaining: passengers.filter(p => !p.assignedRiderId).length,
+      applied: true
+    }
+  }
+
   // Execute Gemini AI Optimization
   const result = await optimizeSeatAllocationWithGemini(foundEvent, riders, passengers)
 
   if (apply && result.suggestions.length > 0) {
+    const carSeatCount = new Map<string, number>()
+    for (const p of passengers) {
+      p.assignedRiderId = null
+    }
     for (const suggestion of result.suggestions) {
-      const passenger = db.participants.find((p: Participant) => p.id === suggestion.passengerId)
-      if (passenger) {
-        passenger.assignedRiderId = suggestion.suggestedRiderId
+      const passenger = db.participants.find(
+        (p: Participant) => p.id === suggestion.passengerId && p.eventId === foundEvent.id && p.role === 'passenger'
+      )
+      const rider = db.participants.find(
+        (r: Participant) => r.id === suggestion.suggestedRiderId && r.eventId === foundEvent.id && r.role === 'rider'
+      )
+      if (passenger && rider) {
+        const used = carSeatCount.get(rider.id) || 0
+        const maxSeats = rider.totalSeats || 4
+        if (used < maxSeats) {
+          carSeatCount.set(rider.id, used + 1)
+          passenger.assignedRiderId = rider.id
+        }
       }
     }
+    foundEvent.routePlan = null
+    foundEvent.updatedAt = new Date().toISOString()
+    await saveDb(db)
+  } else {
+    // Persist any geocoded coordinates discovered during optimization
     await saveDb(db)
   }
 

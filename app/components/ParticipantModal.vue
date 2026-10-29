@@ -118,7 +118,6 @@ function handleSubmit() {
     payload.totalSeats = Math.max(1, Math.min(12, Number(totalSeats.value) || 4))
     payload.price = numericPrice.value > 0 ? Math.round(numericPrice.value * 100) / 100 : null
     payload.departureLocation = departureLocation.value.trim()
-    payload.departureTime = departureTime.value.trim() || undefined
     payload.hasDriver = hasDriver.value
   } else {
     payload.pickupLocation = pickupLocation.value.trim()
@@ -382,19 +381,6 @@ function handleSubmit() {
                 icon="i-lucide-map-pin"
                 required
                 class="w-full"
-              />
-            </div>
-
-            <div>
-              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {{ t('participantModal.departureTimeLabel') }}
-              </label>
-              <UInput
-                v-model="departureTime"
-                type="time"
-                :placeholder="t('participantModal.departureTimePlaceholder')"
-                icon="i-lucide-clock"
-                class="w-full font-mono"
               />
             </div>
           </div>

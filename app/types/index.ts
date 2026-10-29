@@ -14,6 +14,15 @@ export interface Coordinates {
   lng: number
 }
 
+export interface ManualMeetingPoint {
+  id: string
+  name: string
+  time?: string
+  riderIds: string[]
+  coords?: Coordinates | null
+  notes?: string
+}
+
 export interface EventItem {
   id: string
   organizerId: string
@@ -27,6 +36,7 @@ export interface EventItem {
   sharedPassword?: string // organizer sees it or stored on server
   hasPassword?: boolean // public flag
   status: 'active' | 'archived'
+  meetingPoints?: ManualMeetingPoint[]
   routePlan?: ConvoyRoutePlan | null
   createdAt: string
   updatedAt: string
@@ -110,6 +120,7 @@ export interface ConvoyStep {
 export interface ConvoyRoutePlan {
   summary: string
   arrivalTime: string
+  inputFingerprint?: string
   totalConvoyDistanceKm?: number
   waypoints: ConvoyWaypoint[]
   steps: ConvoyStep[]
@@ -121,10 +132,21 @@ export interface ConvoyRoutePlan {
 export interface OptimizationSuggestion {
   passengerId: string
   passengerName: string
+  passengerPickupLocation?: string
   currentRiderId: string | null
   suggestedRiderId: string
   suggestedRiderName: string
+  carModel?: string
+  carDepartureLocation?: string
   distanceKm?: number
+  reason: string
+}
+
+export interface UnusedCarInfo {
+  riderId: string
+  driverName: string
+  carModel: string
+  departureLocation: string
   reason: string
 }
 
@@ -133,4 +155,7 @@ export interface OptimizationResult {
   totalMoved: number
   summary: string
   unassignedRemaining: number
+  usedCarsCount?: number
+  totalCarsCount?: number
+  unusedCars?: UnusedCarInfo[]
 }

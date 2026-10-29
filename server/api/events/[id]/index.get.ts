@@ -1,5 +1,6 @@
-import { getDb } from '../../../utils/db'
+import { getDb, saveDb } from '../../../utils/db'
 import { getAuthenticatedOrganizer, isEventUnlocked } from '../../../utils/auth'
+import { geocodePlaceName } from '../../../utils/convoy'
 import type { CarWithSeats, Participant } from '~/types'
 
 function sanitizeParticipantForClient(
@@ -69,7 +70,23 @@ export default defineEventHandler(async (event) => {
   )
 
   // Full data for unlocked guests or organizer
+  let dbUpdated = false
+  if (!foundEvent.destinationCoords && foundEvent.destination) {
+    foundEvent.destinationCoords = await geocodePlaceName(foundEvent.destination)
+    if (foundEvent.destinationCoords) dbUpdated = true
+  }
+
   const eventParticipants = db.participants.filter(p => p.eventId === foundEvent.id)
+  for (const p of eventParticipants) {
+    if (p.role === 'rider' && !p.departureCoords && p.departureLocation) {
+      p.departureCoords = await geocodePlaceName(p.departureLocation, foundEvent.destination)
+      if (p.departureCoords) dbUpdated = true
+    }
+  }
+
+  if (dbUpdated) {
+    await saveDb(db)
+  }
 
   const myParticipantRaw =
     eventParticipants.find(p => p.token && callerTokens.has(p.token) && !p.ownerParticipantId) ||

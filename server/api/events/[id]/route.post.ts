@@ -23,8 +23,13 @@ export default defineEventHandler(async (event) => {
   if (!isOrganizer) {
     throw createError({
       statusCode: 403,
-      statusMessage: 'Solo l\'organizzatore dell\'evento può calcolare l\'itinerario di gruppo e assegnare i posti con Gemini AI'
+      statusMessage: 'Solo l\'organizzatore dell\'evento può calcolare l\'itinerario sulla mappa'
     })
+  }
+
+  const body = await readBody(event).catch(() => ({}))
+  if (Array.isArray(body?.meetingPoints)) {
+    foundEvent.meetingPoints = body.meetingPoints
   }
 
   const riders = db.participants.filter(p => p.eventId === foundEvent.id && p.role === 'rider')
@@ -37,51 +42,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const unassigned = passengers.filter(p => !p.assignedRiderId)
+  if (unassigned.length > 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Tutti i passeggeri devono essere assegnati a un'auto prima di generare la mappa dei percorsi (${unassigned.length} passeggeri ancora senza posto). Usa prima l'Ottimizzatore Posti o assegnali manualmente.`
+    })
+  }
+
   const plan = await calculateConvoyRouteWithGemini(foundEvent, riders, passengers)
-
-  // Autonomously apply seat assignments to passengers in database while strictly enforcing car seat limits
-  const carSeatUsage = new Map<string, number>()
-  const validAssignments = []
-  const overflowUnassigned = [...(plan.unassignedPassengers || [])]
-
-  if (Array.isArray(plan.passengerAssignments)) {
-    for (const assignment of plan.passengerAssignments) {
-      if (assignment.passengerId && assignment.assignedRiderId) {
-        const p = db.participants.find(part => part.id === assignment.passengerId && part.eventId === foundEvent.id)
-        const r = db.participants.find(part => part.id === assignment.assignedRiderId && part.eventId === foundEvent.id && part.role === 'rider')
-        if (p && r) {
-          const used = carSeatUsage.get(r.id) || 0
-          const maxSeats = r.totalSeats || 4
-          if (used < maxSeats) {
-            carSeatUsage.set(r.id, used + 1)
-            p.assignedRiderId = r.id
-            validAssignments.push(assignment)
-          } else {
-            p.assignedRiderId = null
-            if (!overflowUnassigned.some(u => u.passengerId === p.id)) {
-              overflowUnassigned.push({
-                passengerId: p.id,
-                passengerName: p.name,
-                reason: 'Capienza massima vettura raggiunta'
-              })
-            }
-          }
-        }
-      }
-    }
-    plan.passengerAssignments = validAssignments
-    plan.unassignedPassengers = overflowUnassigned
-  }
-
-  // Handle passengers that AI flagged as unassigned
-  if (Array.isArray(plan.unassignedPassengers)) {
-    for (const unassigned of plan.unassignedPassengers) {
-      const p = db.participants.find(part => part.id === unassigned.passengerId && part.eventId === foundEvent.id)
-      if (p) {
-        p.assignedRiderId = null
-      }
-    }
-  }
 
   foundEvent.routePlan = plan
   foundEvent.updatedAt = new Date().toISOString()
@@ -89,7 +58,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     success: true,
-    routePlan: plan,
-    assignedCount: plan.passengerAssignments?.length || 0
+    routePlan: plan
   }
 })
