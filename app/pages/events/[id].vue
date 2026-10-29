@@ -483,6 +483,16 @@ async function handleDropOnCar(targetRiderId: string, event: DragEvent) {
   carActionLoadingId.value = targetRiderId
   try {
     if (payload.isDriver && payload.fromRiderId) {
+      const fromCar = cars.value.find(c => c.rider.id === payload.fromRiderId)
+      if (fromCar && fromCar.rider.hasDriver !== false) {
+        toast.add({
+          title: 'Azione non consentita',
+          description: 'L\'autista di un\'auto provvista di proprio guidatore non può essere spostato.',
+          color: 'warning'
+        })
+        handleDragEnd()
+        return
+      }
       await unassignDriver(payload.fromRiderId)
     }
 
@@ -529,6 +539,11 @@ async function handleDropOnDriver(targetRiderId: string, event: DragEvent) {
     return
   }
 
+  // Cars with a natural driver cannot have their driver replaced
+  if (targetCar.rider.hasDriver !== false) {
+    return handleDropOnCar(targetRiderId, event)
+  }
+
   carActionLoadingId.value = targetRiderId
   try {
     const res = await assignDriver(targetRiderId, payload.passengerId)
@@ -565,6 +580,16 @@ async function handleDropOnUnassigned(event: DragEvent) {
   actionLoading.value = true
   try {
     if (payload.isDriver && payload.fromRiderId) {
+      const fromCar = cars.value.find(c => c.rider.id === payload.fromRiderId)
+      if (fromCar && fromCar.rider.hasDriver !== false) {
+        toast.add({
+          title: 'Azione non consentita',
+          description: 'L\'autista di un\'auto provvista di proprio guidatore non può essere rimosso.',
+          color: 'warning'
+        })
+        handleDragEnd()
+        return
+      }
       const res = await unassignDriver(payload.fromRiderId)
       if (res.success) {
         toast.add({

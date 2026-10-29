@@ -146,6 +146,8 @@ function onDropCar(e: DragEvent) {
 }
 
 function onDragOverDriver(e: DragEvent) {
+  // Only cars without a driver have an assignable driver slot
+  if (props.car.rider.hasDriver !== false) return
   isDragOverDriver.value = true
 }
 
@@ -156,6 +158,11 @@ function onDragLeaveDriver(e: DragEvent) {
 function onDropDriver(e: DragEvent) {
   isDragOverDriver.value = false
   isDragOverCar.value = false
+  // If car already has its own natural driver, forward to standard car drop (passenger seat)
+  if (props.car.rider.hasDriver !== false) {
+    onDropCar(e)
+    return
+  }
   emit('drop-on-driver', props.car.rider.id, e)
 }
 
@@ -169,6 +176,9 @@ function handlePassengerDragStart(e: DragEvent, p: Participant) {
 }
 
 function handleDriverDragStart(e: DragEvent, d: Participant) {
+  // If car has a natural driver, that driver cannot be dragged anywhere
+  if (props.car.rider.hasDriver !== false) return
+
   emit('drag-start', e, {
     passengerId: d.id,
     passengerName: d.name,
@@ -183,6 +193,10 @@ function canDragPassenger(p: Participant): boolean {
 }
 
 const canDragDriver = computed(() => {
+  // If a car has a driver, that driver cannot be dragged anywhere
+  if (props.car.rider.hasDriver !== false) return false
+
+  // For a car without a driver, the assigned driver can be dragged
   if (!props.car.driver) return false
   if (props.isOrganizer) return true
   return isDriverOfThisCar.value
